@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>GiftsEzz</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <button class="icon-btn" id="closeBtn">✕</button>
+      </div>
+      <div class="header-center">
+        <div class="logo">
+          <span class="logo-icon">🎁</span>
+          <span class="logo-text">GiftsEzz</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <button class="icon-btn">⋮</button>
+      </div>
+    </header>
+
+    <!-- Balance Bar -->
+    <div class="balance-bar">
+      <div class="balance-item">
+        <span class="star">⭐</span>
+        <span id="starsBalance">11</span>
+      </div>
+      <button class="topup-btn" onclick="showScreen('topup')">Пополнить</button>
+    </div>
+
+    <!-- Main Content -->
+    <main class="content" id="mainContent">
+      <!-- LIVE gifts strip -->
+      <div class="live-strip">
+        <div class="live-badge">LIVE</div>
+        <div class="live-items" id="liveItems">
+          <div class="live-item">🔦</div>
+          <div class="live-item">🕯️</div>
+          <div class="live-item">💎</div>
+          <div class="live-item">🧸</div>
+          <div class="live-item">💍</div>
+          <div class="live-item">🍦</div>
+          <div class="live-item">🐰</div>
+        </div>
+      </div>
+
+      <!-- Games List -->
+      <div class="games-list">
+        <!-- Free -->
+        <div class="game-card free" onclick="openGame('free')">
+          <div class="game-icon">🎁</div>
+          <div class="game-info">
+            <div class="game-title">Бесплатно</div>
+            <div class="game-sub">2 кейса</div>
+          </div>
+        </div>
+
+        <!-- Cases -->
+        <div class="game-card cases" onclick="openGame('cases')">
+          <div class="game-icon star-icon">
+            <span>⭐</span>
+            <small>1500</small>
+          </div>
+          <div class="game-info">
+            <div class="game-title">Кейсы</div>
+            <div class="game-sub">18 кейсов</div>
+          </div>
+        </div>
+
+        <!-- Upgrade -->
+        <div class="game-card upgrade" onclick="openGame('upgrade')">
+          <div class="game-icon">🐸</div>
+          <div class="game-info">
+            <div class="game-title">Апгрейд</div>
+            <div class="game-sub">Улучшите свои подарки</div>
+          </div>
+        </div>
+
+        <!-- Crash -->
+        <div class="game-card crash" onclick="openGame('crash')">
+          <div class="game-icon">🚀</div>
+          <div class="game-info">
+            <div class="game-title">Краш</div>
+            <div class="game-sub"><span class="online">Онлайн</span></div>
+          </div>
+        </div>
+
+        <!-- Contracts -->
+        <div class="game-card contracts" onclick="openGame('contracts')">
+          <div class="game-icon">📄</div>
+          <div class="game-info">
+            <div class="game-title">Контракты</div>
+            <div class="game-sub">Объедините подарки</div>
+          </div>
+        </div>
+
+        <!-- Mines -->
+        <div class="game-card mines" onclick="openGame('mines')">
+          <div class="game-icon">💣</div>
+          <div class="game-info">
+            <div class="game-title">Мины</div>
+            <div class="game-sub">Угадайте верную ячейку</div>
+          </div>
+        </div>
+
+        <!-- Eggs -->
+        <div class="game-card eggs" onclick="openGame('eggs')">
+          <div class="game-icon">🥚</div>
+          <div class="game-info">
+            <div class="game-title">Яйца</div>
+            <div class="game-sub">6 кейсов</div>
+          </div>
+        </div>
+
+        <!-- PvP -->
+        <div class="game-card pvp" onclick="openGame('pvp')">
+          <div class="game-icon">⚔️</div>
+          <div class="game-info">
+            <div class="game-title">PvP</div>
+            <div class="game-sub"><span class="online">Онлайн</span></div>
+          </div>
+        </div>
+
+        <!-- Slots -->
+        <div class="game-card slots" onclick="openGame('slots')">
+          <div class="game-icon">🎰</div>
+          <div class="game-info">
+            <div class="game-title">Слоты</div>
+            <div class="game-sub">5 кейсов</div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Topup Screen -->
+    <div class="screen hidden" id="topupScreen">
+      <div class="screen-header">
+        <button class="back-btn" onclick="showScreen('main')">← Назад</button>
+        <h2>Пополнение баланса</h2>
+      </div>
+
+      <div class="tabs">
+        <button class="tab" data-tab="gram" onclick="switchTab('gram')">💠 GRAM</button>
+        <button class="tab active" data-tab="stars" onclick="switchTab('stars')">⭐ Звездами</button>
+        <button class="tab" data-tab="gifts" onclick="switchTab('gifts')">🎁 Подарками</button>
+      </div>
+
+      <div class="tab-content" id="starsTab">
+        <div class="amount-display">
+          <span class="big-amount" id="topupAmount">200</span>
+          <span class="star-big">⭐</span>
+        </div>
+        <div class="quick-amounts">
+          <button onclick="setAmount(500)">+ 500</button>
+          <button onclick="setAmount(2000)">+ 2 000</button>
+          <button onclick="setAmount(5000)">+ 5 000</button>
+        </div>
+        <button class="primary-btn" onclick="alert('В реальном боте здесь будет оплата через Telegram Stars')">Пополнить</button>
+      </div>
+
+      <div class="tab-content hidden" id="gramTab">
+        <div class="amount-display">
+          <span class="big-amount">200</span>
+          <span class="star-big">⭐</span>
+        </div>
+        <p class="bonus">+ Бонус 20 звёзд</p>
+        <p class="gram-info">~ 0 GRAM (-10%)</p>
+        <button class="primary-btn">Пополнить 0 GRAM</button>
+      </div>
+
+      <div class="tab-content hidden" id="giftsTab">
+        <div class="gift-deposit">
+          <h3>Внесите подарок</h3>
+          <p>Затем продайте его за звёзды на баланс или используйте для апгрейда</p>
+          <button class="primary-btn">Добавить</button>
+        </div>
+        <div class="available-gifts">
+          <h4>Доступные подарки</h4>
+          <div class="gifts-grid">
+            <div class="gift-item"><div class="gift-emoji">🔮</div><div class="gift-price">⭐ 449</div></div>
+            <div class="gift-item"><div class="gift-emoji">🍭</div><div class="gift-price">⭐ 449</div></div>
+            <div class="gift-item"><div class="gift-emoji">🕸️</div><div class="gift-price">⭐ 449</div></div>
+            <div class="gift-item"><div class="gift-emoji">🍦</div><div class="gift-price">⭐ 454</div></div>
+            <div class="gift-item"><div class="gift-emoji">🐰</div><div class="gift-price">⭐ 455</div></div>
+            <div class="gift-item"><div class="gift-emoji">🌍</div><div class="gift-price">⭐ 458</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Profile / Referral Screen -->
+    <div class="screen hidden" id="profileScreen">
+      <div class="screen-header">
+        <button class="back-btn" onclick="showScreen('main')">← Назад</button>
+        <h2>Профиль</h2>
+      </div>
+
+      <div class="referral-card">
+        <h3>Приглашай друзей и получай <span class="highlight">10%</span> от их пополнений!</h3>
+        <p>А также по <span class="highlight">⭐ 5</span> за каждого, но не более 30 в день</p>
+        <div class="ref-stats">
+          <div class="ref-stat">
+            <div class="ref-num">15</div>
+            <div class="ref-label">Приглашено</div>
+          </div>
+          <div class="ref-stat">
+            <div class="ref-num">0</div>
+            <div class="ref-label">Заработано</div>
+          </div>
+        </div>
+        <div class="ref-actions">
+          <button class="primary-btn">Пригласить</button>
+          <button class="icon-btn copy">📋</button>
+        </div>
+      </div>
+
+      <div class="my-gifts">
+        <h3>Ваши подарки · 1</h3>
+        <div class="balance-mini">
+          <span>⭐ 454</span>
+          <span>💠 4,45</span>
+        </div>
+        <div class="gifts-row">
+          <div class="add-gift">+</div>
+          <div class="gift-item large">
+            <div class="gift-emoji">🍦</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Game Placeholder Screens -->
+    <div class="screen hidden" id="gameScreen">
+      <div class="screen-header">
+        <button class="back-btn" onclick="showScreen('main')">← Назад</button>
+        <h2 id="gameTitle">Игра</h2>
+      </div>
+      <div class="game-placeholder">
+        <div class="placeholder-icon" id="gameIcon">🎁</div>
+        <h3 id="gameName">Название</h3>
+        <p>Это демо-экран. В полноценной версии здесь будет полноценная механика игры (кейсы, апгрейд, краш, мины и т.д.).</p>
+        <button class="primary-btn" onclick="showScreen('main')">Вернуться</button>
+      </div>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+      <button class="nav-item active" data-screen="main" onclick="showScreen('main')">
+        <span class="nav-icon">🎮</span>
+        <span>Игры</span>
+      </button>
+      <button class="nav-item" data-screen="contests">
+        <span class="nav-icon">🏆</span>
+        <span>Конкурсы</span>
+        <span class="badge">4</span>
+      </button>
+      <button class="nav-item" data-screen="tasks">
+        <span class="nav-icon">✅</span>
+        <span>Задания</span>
+        <span class="badge">9</span>
+      </button>
+      <button class="nav-item" data-screen="tournament">
+        <span class="nav-icon">🌐</span>
+        <span>Турнир</span>
+      </button>
+      <button class="nav-item" data-screen="profile" onclick="showScreen('profile')">
+        <span class="nav-icon">👤</span>
+        <span>Профиль</span>
+      </button>
+    </nav>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
