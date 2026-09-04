@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GiftsEzz App</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --bg-color: #0b0e14;
+            --card-bg: #151a23;
+            --card-border: rgba(255, 255, 255, 0.08);
+            --accent-blue: #0088cc;
+            --accent-green: #00d26a;
+            --accent-orange: #ff9900;
+            --accent-red: #ff3b30;
+            --text-main: #ffffff;
+            --text-sub: #8a8d93;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 12px;
+            box-sizing: border-box;
+            user-select: none;
+            padding-bottom: 80px;
+        }
+
+        .screen { display: none; }
+        .screen.active { display: block; }
+
+        /* Шапка с балансами */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            padding: 12px 16px;
+            border-radius: 16px;
+            margin-bottom: 16px;
+        }
+
+        .balance-item { display: flex; align-items: center; gap: 6px; font-weight: bold; font-size: 15px; }
+
+        /* Карточки */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            padding: 18px;
+            margin-bottom: 14px;
+        }
+
+        /* Краш Игра */
+        .crash-area {
+            height: 180px;
+            background: #090c10;
+            border-radius: 14px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--card-border);
+        }
+
+        .multiplier {
+            font-size: 42px;
+            font-weight: 900;
+            color: var(--accent-green);
+            transition: color 0.2s;
+        }
+        .multiplier.crashed { color: var(--accent-red); }
+
+        .crash-rocket {
+            font-size: 32px;
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            transition: all 0.1s linear;
+        }
+
+        /* Кнопки и инпуты */
+        .btn {
+            background: var(--accent-blue);
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            padding: 14px;
+            font-size: 15px;
+            font-weight: 700;
+            width: 100%;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .btn:active { opacity: 0.8; }
+        .btn-green { background: var(--accent-green); }
+        .btn-orange { background: var(--accent-orange); }
+        .btn-stars { background: linear-gradient(135deg, #ffe600, #ff9900); color: #000; }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            background: #090c10;
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            color: #fff;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        /* Маркетплейс сетка */
+        .market-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .nft-card {
+            background: #090c10;
+            border: 1px solid var(--card-border);
+            border-radius: 14px;
+            padding: 12px;
+            text-align: center;
+        }
+        .nft-img { font-size: 40px; margin-bottom: 8px; }
+
+        /* Нижнее меню навигации */
+        .nav-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--card-bg);
+            border-top: 1px solid var(--card-border);
+            display: flex;
+            justify-content: space-around;
+            padding: 10px 0;
+        }
+        .nav-btn {
+            background: none;
+            border: none;
+            color: var(--text-sub);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+        }
+        .nav-btn.active { color: var(--accent-blue); }
+        .nav-icon { font-size: 20px; }
+    </style>
+</head>
+<body>
+
+    <div class="top-bar">
+        <div class="balance-item">💎 <span id="tonBal">0.00</span> TON</div>
+        <div class="balance-item">⭐ <span id="starsBal">0</span> Stars</div>
+    </div>
+
+    <div id="crashScreen" class="screen active">
+        <div class="card">
+            <div class="crash-area">
+                <div class="multiplier" id="crashMult">1.00x</div>
+                <div class="crash-rocket" id="rocket">🚀</div>
+            </div>
+            <br>
+            <input type="number" id="betAmount" placeholder="Ставка (TON)" step="0.1" value="0.5">
+            <button class="btn btn-green" id="crashBtn" onclick="toggleCrashGame()">Сделать ставку</button>
+        </div>
+    </div>
+
+    <div id="marketScreen" class="screen">
+        <div class="card">
+            <h3 style="margin-top:0;">🛒 Маркетплейс NFT</h3>
+            <div class="market-grid">
+                <div class="nft-card">
+                    <div class="nft-img">🎁</div>
+                    <b>Pepe Gift</b>
+                    <p style="color:var(--text-sub); font-size:12px;">1.5 TON</p>
+                    <button class="btn btn-orange" onclick="buyNFT('Pepe Gift', 1.5)">Купить</button>
+                </div>
+                <div class="nft-card">
+                    <div class="nft-img">👑</div>
+                    <b>Crown NFT</b>
+                    <p style="color:var(--text-sub); font-size:12px;">5.0 TON</p>
+                    <button class="btn btn-orange" onclick="buyNFT('Crown NFT', 5.0)">Купить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="profileScreen" class="screen">
+        <div class="card" style="text-align: center;">
+            <div style="font-size: 48px;" id="pAvatar">👤</div>
+            <h2 id="pName" style="margin: 8px 0;">Пользователь</h2>
+            <p id="pId" style="color: var(--text-sub); margin: 0 0 16px 0;">ID: ---</p>
+            
+            <h4>💳 Пополнить баланс</h4>
+            <button class="btn btn-green" style="margin-bottom: 8px;" onclick="depositTON()">💎 Пополнить TON</button>
+            <button class="btn btn-stars" onclick="depositStars()">⭐ Купить Звёзды (Stars)</button>
+        </div>
+    </div>
+
+    <div class="nav-bar">
+        <button class="nav-btn active" onclick="nav('crashScreen', this)"><span class="nav-icon">📈</span>Краш</button>
+        <button class="nav-btn" onclick="nav('marketScreen', this)"><span class="nav-icon">🛒</span>Маркет</button>
+        <button class="nav-btn" onclick="nav('profileScreen', this)"><span class="nav-icon">👤</span>Профиль</button>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        let ton = 5.00;
+        let stars = 100;
+
+        // Данные профиля
+        if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+            const u = tg.initDataUnsafe.user;
+            document.getElementById('pName').innerText = u.first_name;
+            document.getElementById('pId').innerText = `ID: ${u.id}`;
+        }
+
+        function updateBal() {
+            document.getElementById('tonBal').innerText = ton.toFixed(2);
+            document.getElementById('starsBal').innerText = stars;
+        }
+        updateBal();
+
+        // Переключение вкладок
+        function nav(screenId, btn) {
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+            btn.classList.add('active');
+        }
+
+        // Логика Краш Игры
+        let crashInterval;
+        let isPlaying = false;
+        let currentMult = 1.00;
+        let crashPoint = 0;
+
+        function toggleCrashGame() {
+            const btn = document.getElementById('crashBtn');
+            const multEl = document.getElementById('crashMult');
+            const bet = parseFloat(document.getElementById('betAmount').value);
+
+            if(!isPlaying) {
+                if(bet > ton || bet <= 0) return tg.showAlert("Недостаточно TON!");
+                ton -= bet;
+                updateBal();
+
+                isPlaying = true;
+                currentMult = 1.00;
+                crashPoint = (Math.random() * 4 + 1.1).toFixed(2); // Краш от 1.1x до 5.0x
+                multEl.classList.remove('crashed');
+                btn.innerText = "Забрать выигрыш";
+                btn.className = "btn btn-orange";
+
+                crashInterval = setInterval(() => {
+                    currentMult += 0.05;
+                    multEl.innerText = currentMult.toFixed(2) + 'x';
+
+                    if(currentMult >= crashPoint) {
+                        clearInterval(crashInterval);
+                        isPlaying = false;
+                        multEl.innerText = "CRASH!";
+                        multEl.classList.add('crashed');
+                        btn.innerText = "Сделать ставку";
+                        btn.className = "btn btn-green";
+                        if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
+                    }
+                }, 100);
+            } else {
+                clearInterval(crashInterval);
+                isPlaying = false;
+                const win = bet * currentMult;
+                ton += win;
+                updateBal();
+                tg.showAlert(`Вы выиграли ${win.toFixed(2)} TON!`);
+                multEl.innerText = "1.00x";
+                btn.innerText = "Сделать ставку";
+                btn.className = "btn btn-green";
+                if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+            }
+        }
+
+        // Маркет
+        function buyNFT(name, price) {
+            if(ton < price) return tg.showAlert("Недостаточно TON на балансе!");
+            ton -= price;
+            updateBal();
+            tg.showAlert(`Вы успешно купили ${name}!`);
+        }
+
+        // Пополнение
+        function depositTON() {
+            tg.showAlert("Для пополнения отправьте TON на адрес кошелька бота с вашим ID в комментарии.");
+        }
+
+        function depositStars() {
+            tg.showAlert("Открывается форма оплаты Telegram Stars...");
+            // Здесь интегрируется tg.openInvoice для оплаты Звёзд
+        }
+    </script>
+</body>
+</html>
