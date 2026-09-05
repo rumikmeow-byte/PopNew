@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>PopNew</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #11111b;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+        }
+
+        .card {
+            width: min(90%, 420px);
+            padding: 32px 24px;
+            text-align: center;
+            border-radius: 20px;
+            background: #1b1b29;
+            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.35);
+        }
+
+        h1 {
+            margin-bottom: 12px;
+        }
+
+        .status {
+            font-weight: bold;
+        }
+
+        .info {
+            opacity: 0.7;
+            margin-top: 20px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="card">
+    <h1>🤖 PopNew</h1>
+
+    <p>
+        Статус:
+        <span class="status">
+            ✅ Работает
+        </span>
+    </p>
+
+    <p class="info">
+        Web-сервер успешно запущен.
+    </p>
+
+    <p class="info">
+        <span id="time"></span>
+    </p>
+</div>
+
+<script>
+    document.getElementById("time").textContent =
+        new Date().toLocaleString("ru-RU");
+</script>
+
+</body>
+</html>
