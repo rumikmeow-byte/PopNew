@@ -86,6 +86,24 @@ async def confirm_payment(payment_key, user_id):
         return cur.rowcount == 1
 
 
+async def payment_is_confirmed(payment_key, user_id):
+    async with aiosqlite.connect(DB_NAME) as db:
+        async with db.execute(
+            "SELECT status FROM payment_records WHERE payment_key=? AND user_id=?",
+            (payment_key, user_id),
+        ) as cursor:
+            row = await cursor.fetchone()
+        return bool(row and row[0] == "confirmed")
+
+
+async def record_ton_payment(user_id, stars_amount, comment):
+    return await record_payment(f"ton:{comment}", user_id, "ton", stars_amount)
+
+
+async def confirm_ton_payment(user_id, comment):
+    return await confirm_payment(f"ton:{comment}", user_id)
+
+
 async def api_stars_invoice(request: web.Request):
     user_id = validate_webapp_user(request)
     body = await request.json()
