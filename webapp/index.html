@@ -1,81 +1,127 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
-
-    <title>PopNew</title>
-
-    <style>
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            margin: 0;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #11111b;
-            color: #ffffff;
-            font-family: Arial, sans-serif;
-        }
-
-        .card {
-            width: min(90%, 420px);
-            padding: 32px 24px;
-            text-align: center;
-            border-radius: 20px;
-            background: #1b1b29;
-            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.35);
-        }
-
-        h1 {
-            margin-bottom: 12px;
-        }
-
-        .status {
-            font-weight: bold;
-        }
-
-        .info {
-            opacity: 0.7;
-            margin-top: 20px;
-            font-size: 14px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#17112b">
+  <title>PopNew</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      --bg: #0d0918;
+      --panel: #17112b;
+      --panel2: #21173d;
+      --purple: #8b5cf6;
+      --purple2: #a855f7;
+      --text: #fff;
+      --muted: #a99fbd;
+      --line: rgba(255,255,255,.08);
+      --green: #38d996;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin:0; min-height:100%; background:var(--bg); color:var(--text); font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+    button { font:inherit; border:0; color:inherit; cursor:pointer; }
+    .app { width:min(100%, 520px); margin:auto; min-height:100vh; padding:18px 16px 92px; }
+    .hero { position:relative; overflow:hidden; border:1px solid var(--line); border-radius:28px; padding:22px; background:linear-gradient(145deg,#241642,#17112b 65%); box-shadow:0 18px 60px rgba(124,58,237,.20); }
+    .hero:after { content:""; position:absolute; width:190px; height:190px; right:-80px; top:-90px; border-radius:50%; background:rgba(168,85,247,.28); filter:blur(8px); }
+    .brand { position:relative; z-index:1; display:flex; align-items:center; gap:12px; }
+    .logo { width:52px; height:52px; display:grid; place-items:center; border-radius:17px; font-size:27px; background:linear-gradient(135deg,var(--purple),var(--purple2)); box-shadow:0 10px 30px rgba(139,92,246,.4); }
+    .brand h1 { margin:0; font-size:23px; }
+    .brand p { margin:3px 0 0; color:var(--muted); font-size:13px; }
+    .balance { position:relative; z-index:1; margin-top:22px; }
+    .balance small { color:var(--muted); font-size:13px; }
+    .amount { margin-top:4px; font-size:35px; font-weight:800; letter-spacing:-1px; }
+    .amount span { font-size:21px; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px; }
+    .card { min-height:116px; padding:17px; border:1px solid var(--line); border-radius:22px; background:linear-gradient(145deg,rgba(38,26,67,.96),rgba(22,16,40,.96)); transition:.16s transform; }
+    .card:active { transform:scale(.98); }
+    .icon { width:40px; height:40px; display:grid; place-items:center; border-radius:13px; background:rgba(139,92,246,.18); font-size:21px; }
+    .card b { display:block; margin-top:12px; font-size:15px; }
+    .card span { display:block; margin-top:4px; color:var(--muted); font-size:12px; }
+    .section { margin-top:22px; }
+    .section-title { display:flex; align-items:center; justify-content:space-between; margin:0 4px 10px; }
+    .section-title b { font-size:16px; }
+    .section-title span { color:var(--muted); font-size:12px; }
+    .profile { display:flex; align-items:center; gap:13px; padding:15px; border:1px solid var(--line); border-radius:20px; background:var(--panel); }
+    .avatar { width:46px; height:46px; border-radius:50%; display:grid; place-items:center; overflow:hidden; background:linear-gradient(135deg,#7c3aed,#ec4899); font-weight:800; }
+    .avatar img { width:100%; height:100%; object-fit:cover; }
+    .profile b { font-size:14px; }
+    .profile span { display:block; color:var(--muted); margin-top:3px; font-size:12px; }
+    .primary { width:100%; margin-top:14px; padding:15px 18px; border-radius:17px; background:linear-gradient(135deg,var(--purple),var(--purple2)); font-weight:800; box-shadow:0 12px 30px rgba(139,92,246,.25); }
+    .primary:active { transform:scale(.985); }
+    .hint { color:var(--muted); text-align:center; font-size:11px; margin:12px 4px 0; line-height:1.45; }
+    .nav { position:fixed; z-index:10; left:50%; bottom:10px; transform:translateX(-50%); width:min(calc(100% - 24px),488px); display:grid; grid-template-columns:repeat(4,1fr); padding:8px; gap:5px; border:1px solid var(--line); border-radius:22px; background:rgba(23,17,43,.92); backdrop-filter:blur(18px); box-shadow:0 12px 40px rgba(0,0,0,.45); }
+    .nav button { padding:9px 4px 7px; border-radius:15px; background:transparent; color:#8f849f; font-size:10px; }
+    .nav button.active { color:#fff; background:rgba(139,92,246,.18); }
+    .nav i { display:block; font-style:normal; font-size:19px; margin-bottom:3px; }
+    .toast { position:fixed; left:50%; top:18px; transform:translate(-50%,-20px); opacity:0; pointer-events:none; z-index:20; width:max-content; max-width:calc(100% - 32px); padding:11px 15px; border-radius:14px; background:#241b39; border:1px solid var(--line); box-shadow:0 10px 35px rgba(0,0,0,.35); font-size:13px; transition:.2s; }
+    .toast.show { opacity:1; transform:translate(-50%,0); }
+    @media (min-width:600px) { .nav { bottom:20px; } }
+  </style>
 </head>
-
 <body>
+  <main class="app">
+    <section class="hero">
+      <div class="brand">
+        <div class="logo">🎁</div>
+        <div><h1>PopNew</h1><p>Открывай кейсы · Получай ⭐</p></div>
+      </div>
+      <div class="balance"><small>Твой баланс</small><div class="amount" id="balance">0 <span>⭐</span></div></div>
+      <button class="primary" onclick="deposit()">💎 Пополнить баланс</button>
+    </section>
 
-<div class="card">
-    <h1>🤖 PopNew</h1>
+    <section class="grid">
+      <button class="card" onclick="freeCase()"><div class="icon">🎁</div><b>Бесплатный кейс</b><span>Раз в 24 часа</span></button>
+      <button class="card" onclick="battle()"><div class="icon">⚔️</div><b>Баттлы</b><span>Играй со ставками</span></button>
+      <button class="card" onclick="referrals()"><div class="icon">👥</div><b>Рефералы</b><span>Приглашай друзей</span></button>
+      <button class="card" onclick="profile()"><div class="icon">👤</div><b>Профиль</b><span>Твои данные</span></button>
+    </section>
 
-    <p>
-        Статус:
-        <span class="status">
-            ✅ Работает
-        </span>
-    </p>
+    <section class="section">
+      <div class="section-title"><b>Аккаунт</b><span>Telegram</span></div>
+      <div class="profile">
+        <div class="avatar" id="avatar">P</div>
+        <div><b id="name">Пользователь Telegram</b><span id="username">Mini App PopNew</span></div>
+      </div>
+      <p class="hint">Интерфейс работает внутри Telegram и автоматически подстраивается под безопасную область экрана.</p>
+    </section>
+  </main>
 
-    <p class="info">
-        Web-сервер успешно запущен.
-    </p>
+  <nav class="nav">
+    <button class="active" onclick="home(this)"><i>⌂</i>Главная</button>
+    <button onclick="freeCase()"><i>🎁</i>Кейс</button>
+    <button onclick="battle()"><i>⚔️</i>Баттлы</button>
+    <button onclick="profile()"><i>👤</i>Профиль</button>
+  </nav>
+  <div class="toast" id="toast"></div>
 
-    <p class="info">
-        <span id="time"></span>
-    </p>
-</div>
-
-<script>
-    document.getElementById("time").textContent =
-        new Date().toLocaleString("ru-RU");
-</script>
-
+  <script>
+    const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+      tg.setHeaderColor('#17112b');
+      tg.setBackgroundColor('#0d0918');
+      const u = tg.initDataUnsafe && tg.initDataUnsafe.user;
+      if (u) {
+        document.getElementById('name').textContent = [u.first_name, u.last_name].filter(Boolean).join(' ') || 'Пользователь Telegram';
+        document.getElementById('username').textContent = u.username ? '@' + u.username : 'Telegram';
+        if (u.photo_url) document.getElementById('avatar').innerHTML = '<img src="' + u.photo_url + '" alt="">';
+        else document.getElementById('avatar').textContent = (u.first_name || 'P')[0].toUpperCase();
+      }
+    }
+    function toast(text) {
+      const el = document.getElementById('toast'); el.textContent = text; el.classList.add('show');
+      clearTimeout(window.__toast); window.__toast = setTimeout(() => el.classList.remove('show'), 2200);
+      if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+    }
+    function home() { toast('🏠 Вы на главной'); }
+    function deposit() { toast('💎 Пополнение откроется через бота'); if (tg) setTimeout(() => tg.close(), 700); }
+    function freeCase() { toast('🎁 Бесплатный кейс доступен через бота'); if (tg) setTimeout(() => tg.close(), 700); }
+    function battle() { toast('⚔️ Баттлы откроются через бота'); if (tg) setTimeout(() => tg.close(), 700); }
+    function referrals() { toast('👥 Реферальная система доступна в боте'); if (tg) setTimeout(() => tg.close(), 700); }
+    function profile() { toast('👤 Профиль доступен в боте'); if (tg) setTimeout(() => tg.close(), 700); }
+  </script>
 </body>
 </html>
