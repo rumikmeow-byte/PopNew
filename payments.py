@@ -7,9 +7,10 @@ from urllib.parse import parse_qsl
 import aiosqlite
 from aiohttp import web
 from aiogram import F, Router, types
+from aiogram.filters import Command
 from aiogram.types import LabeledPrice, PreCheckoutQuery
 
-from config import BOT_TOKEN, MAX_DEPOSIT_STARS, DB_NAME
+from config import BOT_TOKEN, BOT_NAME, MAX_DEPOSIT_STARS, DB_NAME, MIN_DEPOSIT_STARS
 from db import update_balance
 
 payments_router = Router()
@@ -96,14 +97,6 @@ async def payment_is_confirmed(payment_key, user_id):
         return bool(row and row[0] == "confirmed")
 
 
-async def record_ton_payment(user_id, stars_amount, comment):
-    return await record_payment(f"ton:{comment}", user_id, "ton", stars_amount)
-
-
-async def confirm_ton_payment(user_id, comment):
-    return await confirm_payment(f"ton:{comment}", user_id)
-
-
 async def api_stars_invoice(request: web.Request):
     user_id = validate_webapp_user(request)
     body = await request.json()
@@ -111,8 +104,11 @@ async def api_stars_invoice(request: web.Request):
         amount = int(body.get("amount", 0))
     except (TypeError, ValueError):
         amount = 0
-    if amount <= 0 or amount > MAX_DEPOSIT_STARS:
-        return web.json_response({"ok": False, "message": f"Сумма должна быть от 1 до {MAX_DEPOSIT_STARS} ⭐."})
+    if amount < MIN_DEPOSIT_STARS or amount > MAX_DEPOSIT_STARS:
+        return web.json_response({
+            "ok": False,
+            "message": f"Сумма должна быть от {MIN_DEPOSIT_STARS} до {MAX_DEPOSIT_STARS} ⭐.",
+        })
 
     nonce = int(time.time() * 1000)
     payload = f"stars_deposit:{user_id}:{amount}:{nonce}"
@@ -120,8 +116,8 @@ async def api_stars_invoice(request: web.Request):
 
     bot = request.app["bot"]
     invoice_link = await bot.create_invoice_link(
-        title=f"Пополнение {amount} ⭐",
-        description=f"Пополнение внутреннего баланса PopNew на {amount} Telegram Stars.",
+        title=f"GIFTSMMS — {amount} ⭐",
+        description=f"Пополнение игрового баланса GIFTSMMS на {amount} Telegram Stars.",
         payload=payload,
         currency="XTR",
         prices=[LabeledPrice(label=f"{amount} Stars", amount=amount)],
@@ -138,7 +134,7 @@ async def pre_checkout_handler(query: PreCheckoutQuery):
         return
     try:
         _, user_id, amount, _ = payload.split(":")
-        if int(user_id) != query.from_user.id or int(amount) <= 0:
+        if int(user_id) != query.from_user.id or int(amount) < MIN_DEPOSIT_STARS or int(amount) > MAX_DEPOSIT_STARS:
             raise ValueError
     except (ValueError, TypeError):
         await query.answer(ok=False, error_message="Некорректный платёж.")
@@ -170,9 +166,17 @@ async def successful_stars_payment(message: types.Message):
         await update_balance(user_id, amount)
         await confirm_payment(key, user_id)
         try:
-            await message.answer(f"✅ Оплата получена. На баланс зачислено {amount} ⭐.")
+            await message.answer(f"✅ GIFTSMMS: на баланс зачислено {amount} ⭐.")
         except Exception:
             pass
+
+
+@payments_router.message(Command("paysupport"))
+async def paysupport_handler(message: types.Message):
+    await message.answer(
+        f"Поддержка {BOT_NAME}: если платёж Stars не зачислился, пришлите сюда номер платежа "
+        "из чека Telegram и ваш @username."
+    )
 
 
 def register_payment_routes(app: web.Application):
