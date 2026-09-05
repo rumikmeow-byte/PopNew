@@ -1,0 +1,8 @@
+aiogram
+python-dotenv
+aiosqlite
+pytonconnect
+tonpy
+pynacl
+requests
+aiohttp
