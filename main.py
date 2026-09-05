@@ -15,7 +15,23 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
 from config import BOT_TOKEN, BOT_WALLET_ADDRESS, MAX_DEPOSIT_STARS, MIN_DEPOSIT_STARS, MIN_DEPOSIT_TON, TON_TO_STARS_RATE
-from db import init_db, get_user, get_referral_stats, update_balance, set_free_case_time, reset_share_count, increment_share_count, create_battle, add_player_to_battle, get_battle_info, get_active_battles, get_battle_players
+from db import (
+    init_db,
+    get_user,
+    get_referral_stats,
+    update_balance,
+    set_free_case_time,
+    reset_share_count,
+    increment_share_count,
+    create_battle,
+    add_player_to_battle,
+    get_battle_info,
+    get_active_battles,
+    get_battle_players,
+    get_battle_snapshot,
+    start_ready_battles,
+    resolve_finished_battles,
+)
 from user_handlers import handlers_router
 from admin_handlers import admin_router
 from payments import payments_router, init_payment_db, register_payment_routes, record_ton_payment, confirm_ton_payment, payment_is_confirmed
@@ -175,8 +191,34 @@ async def api_battles(request: web.Request):
     battles = []
     for r in rows:
         players = await get_battle_players(r[0])
-        battles.append({"battle_id": r[0], "creator_id": r[1], "currency": r[2], "bank_stars": r[3], "bank_ton": r[4], "hash": r[5], "max_players": r[6], "players_count": len(players)})
+        battles.append({
+            "battle_id": r[0],
+            "creator_id": r[1],
+            "currency": r[2],
+            "bank_stars": r[3],
+            "bank_ton": r[4],
+            "hash": r[5],
+            "max_players": r[6],
+            "status": r[7],
+            "winner_id": r[8],
+            "created_at": r[9],
+            "started_at": r[10],
+            "ended_at": r[11],
+            "players_count": len(players),
+        })
     return web.json_response({"battles": battles})
+
+
+async def api_battle(request: web.Request):
+    validate_webapp_user(request)
+    try:
+        battle_id = int(request.match_info["battle_id"])
+    except (TypeError, ValueError):
+        raise web.HTTPBadRequest(text="Некорректный battle_id")
+    snapshot = await get_battle_snapshot(battle_id)
+    if not snapshot:
+        raise web.HTTPNotFound(text="Батл не найден")
+    return web.json_response(snapshot)
 
 
 async def api_create_battle(request: web.Request):
@@ -189,29 +231,48 @@ async def api_create_battle(request: web.Request):
         max_players = 10
     if currency not in ("stars", "ton"):
         return web.json_response({"ok": False, "message": "Неверная валюта."})
-    return web.json_response({"ok": True, "battle_id": await create_battle(user_id, currency, max_players)})
+    battle_id = await create_battle(user_id, currency, max_players)
+    return web.json_response({"ok": True, "battle_id": battle_id})
 
 
 async def api_join_battle(request: web.Request):
     user_id, _ = validate_webapp_user(request)
     body = await request.json()
     try:
-        battle_id = int(body.get("battle_id")); amount = int(body.get("amount", 0))
+        battle_id = int(body.get("battle_id"))
+        amount = int(body.get("amount", 0))
     except (TypeError, ValueError):
         return web.json_response({"ok": False, "message": "Некорректные данные."})
     battle = await get_battle_info(battle_id)
     if not battle or amount <= 0:
         return web.json_response({"ok": False, "message": "Батл не найден или ставка неверна."})
-    if battle["currency"] == "stars":
-        user = await get_user(user_id)
-        if user["balance"] < amount:
-            return web.json_response({"ok": False, "message": "Недостаточно ⭐."})
-        await update_balance(user_id, -amount)
-        ok, message = await add_player_to_battle(battle_id, user_id, bet_stars=amount)
-        if not ok:
-            await update_balance(user_id, amount)
-        return web.json_response({"ok": ok, "message": message})
-    return web.json_response({"ok": False, "message": "TON-игры доступны в демо-режиме без денежных ставок."})
+    if battle["currency"] != "stars":
+        return web.json_response({"ok": False, "message": "TON-игры пока работают только в демо-режиме."})
+    user = await get_user(user_id)
+    if user["balance"] < amount:
+        return web.json_response({"ok": False, "message": "Недостаточно ⭐."})
+    await update_balance(user_id, -amount)
+    ok, message = await add_player_to_battle(battle_id, user_id, bet_stars=amount)
+    if not ok:
+        await update_balance(user_id, amount)
+    return web.json_response({"ok": ok, "message": message, "battle": await get_battle_snapshot(battle_id) if ok else None})
+
+
+async def battle_engine_loop():
+    logging.info("Battle engine started")
+    while True:
+        try:
+            started = await start_ready_battles(start_delay=3)
+            if started:
+                logging.info("Battles started: %s", started)
+            resolved = await resolve_finished_battles(round_seconds=8)
+            if resolved:
+                logging.info("Battles resolved: %s", resolved)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logging.exception("Battle engine tick failed")
+        await asyncio.sleep(0.5)
 
 
 async def main():
@@ -236,6 +297,7 @@ async def main():
     app.router.add_post("/api/deposit", api_deposit)
     app.router.add_post("/api/deposit/check", api_check_deposit)
     app.router.add_get("/api/battles", api_battles)
+    app.router.add_get("/api/battles/{battle_id}", api_battle)
     app.router.add_post("/api/battles", api_create_battle)
     app.router.add_post("/api/battles/join", api_join_battle)
     register_payment_routes(app)
@@ -244,6 +306,7 @@ async def main():
     await runner.setup()
     site = web.TCPSite(runner, host="0.0.0.0", port=port)
     await site.start()
+    engine_task = asyncio.create_task(battle_engine_loop())
     logging.info("Web server started on 0.0.0.0:%s", port)
     try:
         await bot.delete_webhook(drop_pending_updates=True)
@@ -253,6 +316,11 @@ async def main():
         logging.info("Bot stopping...")
         raise
     finally:
+        engine_task.cancel()
+        try:
+            await engine_task
+        except asyncio.CancelledError:
+            pass
         await bot.session.close()
         await runner.cleanup()
 
