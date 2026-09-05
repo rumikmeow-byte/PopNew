@@ -23,6 +23,7 @@ from utils import check_all_subscriptions, check_transaction
 
 BASE_DIR = Path(__file__).resolve().parent
 REQUIRED_CASE_CHANNEL = "eclipsedlf"
+APP_NAME = "GiftsMMS"
 
 
 def validate_webapp_user(request: web.Request):
@@ -59,7 +60,7 @@ async def handle_index(request: web.Request):
 
 
 async def handle_ton_manifest(request: web.Request):
-    return web.json_response({"url": str(request.url.with_path("/").with_query("")), "name": "PopNew", "iconUrl": str(request.url.with_path("/icon-180.png").with_query(""))})
+    return web.json_response({"url": str(request.url.with_path("/").with_query("")), "name": APP_NAME, "iconUrl": str(request.url.with_path("/icon-180.png").with_query(""))})
 
 
 async def health(request: web.Request):
@@ -133,14 +134,12 @@ async def api_deposit(request: web.Request):
         amount = int(body.get("amount", 0))
     except (TypeError, ValueError):
         amount = 0
-
     if amount < MIN_DEPOSIT_STARS:
         return web.json_response({"ok": False, "message": f"Минимальное пополнение — {MIN_DEPOSIT_STARS} ⭐ или {MIN_DEPOSIT_TON:g} TON."})
     if amount > MAX_DEPOSIT_STARS:
         return web.json_response({"ok": False, "message": f"Максимальное пополнение — {MAX_DEPOSIT_STARS} ⭐."})
     if not BOT_WALLET_ADDRESS or TON_TO_STARS_RATE <= 0:
         return web.json_response({"ok": False, "message": "Пополнение TON пока не настроено."})
-
     ton_amount = max(amount / TON_TO_STARS_RATE, MIN_DEPOSIT_TON)
     credited_stars = max(amount, int(ton_amount * TON_TO_STARS_RATE))
     comment = f"dep_{user_id}_{credited_stars}_{int(time.time())}"
@@ -216,7 +215,7 @@ async def api_join_battle(request: web.Request):
 
 
 async def main():
-    logging.info("Starting PopNew...")
+    logging.info("Starting %s...", APP_NAME)
     await init_db()
     await init_payment_db()
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -248,7 +247,7 @@ async def main():
     logging.info("Web server started on 0.0.0.0:%s", port)
     try:
         await bot.delete_webhook(drop_pending_updates=True)
-        logging.info("Telegram bot started")
+        logging.info("Bot started")
         await dp.start_polling(bot)
     except asyncio.CancelledError:
         logging.info("Bot stopping...")
