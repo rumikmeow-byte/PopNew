@@ -41,25 +41,21 @@ def validate_webapp_user(request: web.Request):
     init_data = request.headers.get("X-Telegram-Init-Data", "")
     if not init_data:
         raise web.HTTPUnauthorized(text="Telegram initData is required")
-
     pairs = dict(parse_qsl(init_data, keep_blank_values=True))
     received_hash = pairs.pop("hash", None)
     auth_date = pairs.get("auth_date")
     if not received_hash or not auth_date:
         raise web.HTTPUnauthorized(text="Invalid Telegram initData")
-
     try:
         if int(time.time()) - int(auth_date) > 86400:
             raise web.HTTPUnauthorized(text="Telegram session expired")
     except ValueError:
         raise web.HTTPUnauthorized(text="Invalid auth_date")
-
     data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(pairs.items()))
     secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
     calculated = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(calculated, received_hash):
         raise web.HTTPUnauthorized(text="Invalid Telegram signature")
-
     user_raw = pairs.get("user")
     if not user_raw:
         raise web.HTTPUnauthorized(text="Telegram user is missing")
@@ -71,8 +67,15 @@ def validate_webapp_user(request: web.Request):
 
 
 async def handle_index(request: web.Request):
-    index_path = BASE_DIR / "webapp" / "index.html"
-    return web.FileResponse(index_path)
+    return web.FileResponse(BASE_DIR / "webapp" / "index.html")
+
+
+async def handle_ton_manifest(request: web.Request):
+    return web.json_response({
+        "url": str(request.url.with_path("/").with_query("")),
+        "name": "PopNew",
+        "iconUrl": str(request.url.with_path("/icon-180.png").with_query("")),
+    })
 
 
 async def health(request: web.Request):
@@ -108,14 +111,8 @@ async def api_case_access(request: web.Request):
     user_id, _ = validate_webapp_user(request)
     subscribed = await case_subscription_ok(request.app["bot"], user_id)
     user = await get_user(user_id)
-    now = int(time.time())
-    available = now - user["free_case_time"] >= 86400
-    return web.json_response({
-        "ok": subscribed and available,
-        "subscribed": subscribed,
-        "available": available,
-        "channel": REQUIRED_CASE_CHANNEL,
-    })
+    available = int(time.time()) - user["free_case_time"] >= 86400
+    return web.json_response({"ok": subscribed and available, "subscribed": subscribed, "available": available, "channel": REQUIRED_CASE_CHANNEL})
 
 
 async def api_free_case(request: web.Request):
@@ -130,7 +127,6 @@ async def api_free_case(request: web.Request):
         return web.json_response({"ok": False, "message": "Сначала подпишитесь на обязательные каналы."})
     if user["shared_count"] < 2:
         return web.json_response({"ok": False, "message": f"Сначала поделитесь ссылкой 2 раза. Прогресс: {user['shared_count']}/2", "need_share": True})
-
     import random
     reward = random.choice([1, 5, 10])
     await update_balance(user_id, reward)
@@ -143,8 +139,7 @@ async def api_referrals(request: web.Request):
     user_id, _ = validate_webapp_user(request)
     count, earned = await get_referral_stats(user_id)
     bot_info = await request.app["bot"].get_me()
-    link = f"https://t.me/{bot_info.username}?start=ref_{user_id}"
-    return web.json_response({"count": count, "earned": earned, "link": link})
+    return web.json_response({"count": count, "earned": earned, "link": f"https://t.me/{bot_info.username}?start=ref_{user_id}"})
 
 
 async def api_deposit(request: web.Request):
@@ -161,14 +156,7 @@ async def api_deposit(request: web.Request):
     ton_amount = amount / TON_TO_STARS_RATE
     comment = f"dep_{user_id}_{amount}_{int(time.time())}"
     ton_link = f"ton://transfer/{BOT_WALLET_ADDRESS}?{urlencode({'amount': int(ton_amount * 1e9), 'text': comment})}"
-    return web.json_response({
-        "ok": True,
-        "amount": amount,
-        "ton": ton_amount,
-        "rate": TON_TO_STARS_RATE,
-        "comment": comment,
-        "ton_link": ton_link,
-    })
+    return web.json_response({"ok": True, "amount": amount, "ton": ton_amount, "rate": TON_TO_STARS_RATE, "comment": comment, "address": BOT_WALLET_ADDRESS, "ton_link": ton_link})
 
 
 async def api_check_deposit(request: web.Request):
@@ -191,10 +179,7 @@ async def api_check_deposit(request: web.Request):
 async def api_battles(request: web.Request):
     validate_webapp_user(request)
     rows = await get_active_battles()
-    battles = []
-    for row in rows:
-        battles.append({"battle_id": row[0], "creator_id": row[1], "currency": row[2], "bank_stars": row[3], "bank_ton": row[4], "hash": row[5], "max_players": row[6]})
-    return web.json_response({"battles": battles})
+    return web.json_response({"battles": [{"battle_id": r[0], "creator_id": r[1], "currency": r[2], "bank_stars": r[3], "bank_ton": r[4], "hash": r[5], "max_players": r[6]} for r in rows]})
 
 
 async def api_create_battle(request: web.Request):
@@ -207,16 +192,14 @@ async def api_create_battle(request: web.Request):
         max_players = 10
     if currency not in ("stars", "ton"):
         return web.json_response({"ok": False, "message": "Неверная валюта."})
-    battle_id = await create_battle(user_id, currency, max_players)
-    return web.json_response({"ok": True, "battle_id": battle_id})
+    return web.json_response({"ok": True, "battle_id": await create_battle(user_id, currency, max_players)})
 
 
 async def api_join_battle(request: web.Request):
     user_id, _ = validate_webapp_user(request)
     body = await request.json()
     try:
-        battle_id = int(body.get("battle_id"))
-        amount = int(body.get("amount", 0))
+        battle_id = int(body.get("battle_id")); amount = int(body.get("amount", 0))
     except (TypeError, ValueError):
         return web.json_response({"ok": False, "message": "Некорректные данные."})
     battle = await get_battle_info(battle_id)
@@ -248,6 +231,7 @@ async def main():
     app["bot"] = bot
     app.router.add_get("/", handle_index)
     app.router.add_get("/health", health)
+    app.router.add_get("/tonconnect-manifest.json", handle_ton_manifest)
     app.router.add_get("/api/me", api_me)
     app.router.add_post("/api/share", api_share)
     app.router.add_get("/api/case-access", api_case_access)
@@ -266,7 +250,6 @@ async def main():
     site = web.TCPSite(runner, host="0.0.0.0", port=port)
     await site.start()
     logging.info("Web server started on 0.0.0.0:%s", port)
-
     try:
         await bot.delete_webhook(drop_pending_updates=True)
         logging.info("Telegram bot started")
