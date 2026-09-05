@@ -33,6 +33,7 @@ from admin_handlers import admin_router
 from utils import check_all_subscriptions, check_transaction
 
 BASE_DIR = Path(__file__).resolve().parent
+REQUIRED_CASE_CHANNEL = "eclipsedlf"
 
 
 def validate_webapp_user(request: web.Request):
@@ -94,12 +95,36 @@ async def api_share(request: web.Request):
     return web.json_response({"ok": True, "shared_count": user["shared_count"]})
 
 
+async def case_subscription_ok(bot: Bot, user_id: int) -> bool:
+    try:
+        member = await bot.get_chat_member(chat_id=f"@{REQUIRED_CASE_CHANNEL}", user_id=user_id)
+        return member.status in ("member", "administrator", "creator")
+    except Exception:
+        return False
+
+
+async def api_case_access(request: web.Request):
+    user_id, _ = validate_webapp_user(request)
+    subscribed = await case_subscription_ok(request.app["bot"], user_id)
+    user = await get_user(user_id)
+    now = int(time.time())
+    available = now - user["free_case_time"] >= 86400
+    return web.json_response({
+        "ok": subscribed and available,
+        "subscribed": subscribed,
+        "available": available,
+        "channel": REQUIRED_CASE_CHANNEL,
+    })
+
+
 async def api_free_case(request: web.Request):
     user_id, _ = validate_webapp_user(request)
     user = await get_user(user_id)
     now = int(time.time())
     if now - user["free_case_time"] < 86400:
         return web.json_response({"ok": False, "message": "Бесплатный кейс будет доступен через 24 часа."})
+    if not await case_subscription_ok(request.app["bot"], user_id):
+        return web.json_response({"ok": False, "message": "Подпишитесь на @eclipsedlf и нажмите «Проверить подписку»."})
     if not await check_all_subscriptions(request.app["bot"], user_id):
         return web.json_response({"ok": False, "message": "Сначала подпишитесь на обязательные каналы."})
     if user["shared_count"] < 2:
@@ -131,11 +156,18 @@ async def api_deposit(request: web.Request):
     if amount <= 0 or amount > MAX_DEPOSIT_STARS:
         return web.json_response({"ok": False, "message": f"Сумма должна быть от 1 до {MAX_DEPOSIT_STARS} ⭐."})
     if not BOT_WALLET_ADDRESS or TON_TO_STARS_RATE <= 0:
-        return web.json_response({"ok": False, "message": "Пополнение пока не настроено."})
+        return web.json_response({"ok": False, "message": "Пополнение TON пока не настроено."})
     ton_amount = amount / TON_TO_STARS_RATE
     comment = f"dep_{user_id}_{amount}_{int(time.time())}"
     ton_link = f"ton://transfer/{BOT_WALLET_ADDRESS}?{urlencode({'amount': int(ton_amount * 1e9), 'text': comment})}"
-    return web.json_response({"ok": True, "amount": amount, "ton": ton_amount, "comment": comment, "ton_link": ton_link})
+    return web.json_response({
+        "ok": True,
+        "amount": amount,
+        "ton": ton_amount,
+        "rate": TON_TO_STARS_RATE,
+        "comment": comment,
+        "ton_link": ton_link,
+    })
 
 
 async def api_check_deposit(request: web.Request):
@@ -198,7 +230,7 @@ async def api_join_battle(request: web.Request):
         if not ok:
             await update_balance(user_id, amount)
         return web.json_response({"ok": ok, "message": message})
-    return web.json_response({"ok": False, "message": "TON-баттлы оформляются через раздел пополнения."})
+    return web.json_response({"ok": False, "message": "TON-игры доступны в демо-режиме без денежных ставок."})
 
 
 async def main():
@@ -215,6 +247,7 @@ async def main():
     app.router.add_get("/health", health)
     app.router.add_get("/api/me", api_me)
     app.router.add_post("/api/share", api_share)
+    app.router.add_get("/api/case-access", api_case_access)
     app.router.add_post("/api/free-case", api_free_case)
     app.router.add_get("/api/referrals", api_referrals)
     app.router.add_post("/api/deposit", api_deposit)
