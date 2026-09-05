@@ -1,7 +1,0 @@
-aiogram
-python-dotenv
-aiosqlite
-requests
-aiohttp
-pynacl
-
