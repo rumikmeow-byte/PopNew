@@ -30,6 +30,7 @@ from db import (
 )
 from user_handlers import handlers_router
 from admin_handlers import admin_router
+from payments import payments_router, init_payment_db, register_payment_routes
 from utils import check_all_subscriptions, check_transaction
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -236,10 +237,12 @@ async def api_join_battle(request: web.Request):
 async def main():
     logging.info("Starting PopNew...")
     await init_db()
+    await init_payment_db()
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
     dp.include_router(handlers_router)
     dp.include_router(admin_router)
+    dp.include_router(payments_router)
 
     app = web.Application()
     app["bot"] = bot
@@ -255,6 +258,7 @@ async def main():
     app.router.add_get("/api/battles", api_battles)
     app.router.add_post("/api/battles", api_create_battle)
     app.router.add_post("/api/battles/join", api_join_battle)
+    register_payment_routes(app)
 
     port = int(os.getenv("PORT", "10000"))
     runner = web.AppRunner(app)
