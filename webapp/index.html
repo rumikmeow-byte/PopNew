@@ -1,127 +1,55 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-  <meta name="theme-color" content="#17112b">
-  <title>PopNew</title>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <style>
-    :root {
-      --bg: #0d0918;
-      --panel: #17112b;
-      --panel2: #21173d;
-      --purple: #8b5cf6;
-      --purple2: #a855f7;
-      --text: #fff;
-      --muted: #a99fbd;
-      --line: rgba(255,255,255,.08);
-      --green: #38d996;
-    }
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    html, body { margin:0; min-height:100%; background:var(--bg); color:var(--text); font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    body { padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
-    button { font:inherit; border:0; color:inherit; cursor:pointer; }
-    .app { width:min(100%, 520px); margin:auto; min-height:100vh; padding:18px 16px 92px; }
-    .hero { position:relative; overflow:hidden; border:1px solid var(--line); border-radius:28px; padding:22px; background:linear-gradient(145deg,#241642,#17112b 65%); box-shadow:0 18px 60px rgba(124,58,237,.20); }
-    .hero:after { content:""; position:absolute; width:190px; height:190px; right:-80px; top:-90px; border-radius:50%; background:rgba(168,85,247,.28); filter:blur(8px); }
-    .brand { position:relative; z-index:1; display:flex; align-items:center; gap:12px; }
-    .logo { width:52px; height:52px; display:grid; place-items:center; border-radius:17px; font-size:27px; background:linear-gradient(135deg,var(--purple),var(--purple2)); box-shadow:0 10px 30px rgba(139,92,246,.4); }
-    .brand h1 { margin:0; font-size:23px; }
-    .brand p { margin:3px 0 0; color:var(--muted); font-size:13px; }
-    .balance { position:relative; z-index:1; margin-top:22px; }
-    .balance small { color:var(--muted); font-size:13px; }
-    .amount { margin-top:4px; font-size:35px; font-weight:800; letter-spacing:-1px; }
-    .amount span { font-size:21px; }
-    .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px; }
-    .card { min-height:116px; padding:17px; border:1px solid var(--line); border-radius:22px; background:linear-gradient(145deg,rgba(38,26,67,.96),rgba(22,16,40,.96)); transition:.16s transform; }
-    .card:active { transform:scale(.98); }
-    .icon { width:40px; height:40px; display:grid; place-items:center; border-radius:13px; background:rgba(139,92,246,.18); font-size:21px; }
-    .card b { display:block; margin-top:12px; font-size:15px; }
-    .card span { display:block; margin-top:4px; color:var(--muted); font-size:12px; }
-    .section { margin-top:22px; }
-    .section-title { display:flex; align-items:center; justify-content:space-between; margin:0 4px 10px; }
-    .section-title b { font-size:16px; }
-    .section-title span { color:var(--muted); font-size:12px; }
-    .profile { display:flex; align-items:center; gap:13px; padding:15px; border:1px solid var(--line); border-radius:20px; background:var(--panel); }
-    .avatar { width:46px; height:46px; border-radius:50%; display:grid; place-items:center; overflow:hidden; background:linear-gradient(135deg,#7c3aed,#ec4899); font-weight:800; }
-    .avatar img { width:100%; height:100%; object-fit:cover; }
-    .profile b { font-size:14px; }
-    .profile span { display:block; color:var(--muted); margin-top:3px; font-size:12px; }
-    .primary { width:100%; margin-top:14px; padding:15px 18px; border-radius:17px; background:linear-gradient(135deg,var(--purple),var(--purple2)); font-weight:800; box-shadow:0 12px 30px rgba(139,92,246,.25); }
-    .primary:active { transform:scale(.985); }
-    .hint { color:var(--muted); text-align:center; font-size:11px; margin:12px 4px 0; line-height:1.45; }
-    .nav { position:fixed; z-index:10; left:50%; bottom:10px; transform:translateX(-50%); width:min(calc(100% - 24px),488px); display:grid; grid-template-columns:repeat(4,1fr); padding:8px; gap:5px; border:1px solid var(--line); border-radius:22px; background:rgba(23,17,43,.92); backdrop-filter:blur(18px); box-shadow:0 12px 40px rgba(0,0,0,.45); }
-    .nav button { padding:9px 4px 7px; border-radius:15px; background:transparent; color:#8f849f; font-size:10px; }
-    .nav button.active { color:#fff; background:rgba(139,92,246,.18); }
-    .nav i { display:block; font-style:normal; font-size:19px; margin-bottom:3px; }
-    .toast { position:fixed; left:50%; top:18px; transform:translate(-50%,-20px); opacity:0; pointer-events:none; z-index:20; width:max-content; max-width:calc(100% - 32px); padding:11px 15px; border-radius:14px; background:#241b39; border:1px solid var(--line); box-shadow:0 10px 35px rgba(0,0,0,.35); font-size:13px; transition:.2s; }
-    .toast.show { opacity:1; transform:translate(-50%,0); }
-    @media (min-width:600px) { .nav { bottom:20px; } }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#10091d">
+<title>PopNew</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--bg:#0d0817;--panel:#171027;--panel2:#21163a;--p:#8b5cf6;--p2:#c026d3;--text:#fff;--muted:#a79bb9;--line:#ffffff12;--green:#35df9b;--danger:#ff5d7a}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;background:radial-gradient(circle at 50% -10%,#321557 0,#0d0817 38%);color:var(--text);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}button{font:inherit;color:inherit;border:0;cursor:pointer}.app{width:min(100%,540px);margin:auto;padding:16px 15px 100px}.top{display:flex;align-items:center;justify-content:space-between;margin:2px 3px 14px}.brand{display:flex;gap:10px;align-items:center}.logo{width:44px;height:44px;border-radius:15px;display:grid;place-items:center;font-size:23px;background:linear-gradient(135deg,var(--p),var(--p2));box-shadow:0 8px 25px #8b5cf655}.brand b{font-size:18px}.brand span{display:block;color:var(--muted);font-size:11px;margin-top:2px}.avatar{width:42px;height:42px;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:linear-gradient(135deg,#7c3aed,#db2777);font-weight:800}.avatar img{width:100%;height:100%;object-fit:cover}.hero{padding:21px;border:1px solid var(--line);border-radius:26px;background:linear-gradient(145deg,#291645,#171027 68%);box-shadow:0 18px 55px #7c3aed22}.label{font-size:12px;color:var(--muted)}.balance{font-size:37px;font-weight:850;letter-spacing:-1px;margin-top:3px}.balance small{font-size:20px}.hero-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:16px}.btn{padding:13px;border-radius:15px;font-weight:750;background:#ffffff0c;border:1px solid var(--line)}.btn.primary{background:linear-gradient(135deg,var(--p),var(--p2));border:0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-top:13px}.tile{min-height:112px;text-align:left;padding:15px;border-radius:21px;background:linear-gradient(145deg,#211637,#151021);border:1px solid var(--line)}.tile:active,.btn:active{transform:scale(.98)}.ico{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:#8b5cf626;font-size:20px}.tile b{display:block;margin-top:10px;font-size:14px}.tile span{display:block;margin-top:4px;color:var(--muted);font-size:11px}.page{display:none}.page.active{display:block}.section{margin-top:19px}.title{display:flex;justify-content:space-between;align-items:center;margin:0 4px 9px}.title b{font-size:16px}.title span{font-size:11px;color:var(--muted)}.panel{padding:15px;border:1px solid var(--line);border-radius:20px;background:#171027}.row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--line)}.row:last-child{border-bottom:0}.row span{color:var(--muted);font-size:12px}.row b{font-size:14px}.input{width:100%;padding:13px;border-radius:14px;background:#0d0817;color:#fff;border:1px solid var(--line);outline:none;margin-top:8px}.input:focus{border-color:#8b5cf677}.stack{display:grid;gap:9px}.battle{padding:14px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(145deg,#211637,#151021);margin-bottom:9px}.battle-head{display:flex;justify-content:space-between}.badge{padding:5px 8px;border-radius:9px;background:#8b5cf622;color:#c4a8ff;font-size:10px}.muted{color:var(--muted);font-size:11px}.empty{text-align:center;padding:25px;color:var(--muted);font-size:12px}.bottom{position:fixed;z-index:20;bottom:9px;left:50%;transform:translateX(-50%);width:min(calc(100% - 22px),515px);padding:7px;display:grid;grid-template-columns:repeat(4,1fr);gap:5px;border:1px solid var(--line);border-radius:22px;background:#171027eF;backdrop-filter:blur(18px);box-shadow:0 12px 40px #0008}.bottom button{background:transparent;border-radius:15px;padding:7px 3px;color:#8e829d;font-size:10px}.bottom button.active{background:#8b5cf620;color:#fff}.bottom i{display:block;font-style:normal;font-size:18px;margin-bottom:2px}.toast{position:fixed;z-index:50;top:17px;left:50%;transform:translate(-50%,-15px);opacity:0;pointer-events:none;background:#241735;border:1px solid var(--line);padding:11px 14px;border-radius:14px;font-size:12px;max-width:calc(100% - 30px);transition:.2s}.toast.show{opacity:1;transform:translate(-50%,0)}.modal{position:fixed;inset:0;z-index:40;display:none;align-items:flex-end;background:#0008}.modal.show{display:flex}.sheet{width:min(100%,540px);margin:auto;padding:20px 16px calc(20px + env(safe-area-inset-bottom));border-radius:25px 25px 0 0;background:#171027;border:1px solid var(--line)}.sheet h3{margin:0 0 12px}.close{float:right;background:#ffffff0c;border-radius:10px;padding:6px 10px}.amounts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.amounts button{padding:12px;border-radius:13px;background:#8b5cf618;border:1px solid var(--line)}
+</style>
 </head>
 <body>
-  <main class="app">
-    <section class="hero">
-      <div class="brand">
-        <div class="logo">🎁</div>
-        <div><h1>PopNew</h1><p>Открывай кейсы · Получай ⭐</p></div>
-      </div>
-      <div class="balance"><small>Твой баланс</small><div class="amount" id="balance">0 <span>⭐</span></div></div>
-      <button class="primary" onclick="deposit()">💎 Пополнить баланс</button>
-    </section>
+<div class="app">
+  <div class="top"><div class="brand"><div class="logo">🎁</div><div><b>PopNew</b><span>Stars · Cases · Battles</span></div></div><div class="avatar" id="avatar">P</div></div>
 
-    <section class="grid">
-      <button class="card" onclick="freeCase()"><div class="icon">🎁</div><b>Бесплатный кейс</b><span>Раз в 24 часа</span></button>
-      <button class="card" onclick="battle()"><div class="icon">⚔️</div><b>Баттлы</b><span>Играй со ставками</span></button>
-      <button class="card" onclick="referrals()"><div class="icon">👥</div><b>Рефералы</b><span>Приглашай друзей</span></button>
-      <button class="card" onclick="profile()"><div class="icon">👤</div><b>Профиль</b><span>Твои данные</span></button>
-    </section>
+  <section id="home" class="page active">
+    <div class="hero"><div class="label">Твой баланс</div><div class="balance" id="balance">0 <small>⭐</small></div><div class="hero-actions"><button class="btn primary" onclick="openDeposit()">💎 Пополнить</button><button class="btn" onclick="loadProfile()">↻ Обновить</button></div></div>
+    <div class="grid"><button class="tile" onclick="freeCase()"><div class="ico">🎁</div><b>Бесплатный кейс</b><span>Каждые 24 часа</span></button><button class="tile" onclick="showPage('battles')"><div class="ico">⚔️</div><b>Баттлы</b><span>Ставки ⭐</span></button><button class="tile" onclick="showPage('refs')"><div class="ico">👥</div><b>Рефералы</b><span>+1 ⭐ за друга</span></button><button class="tile" onclick="showPage('profile')"><div class="ico">👤</div><b>Профиль</b><span>Твои данные</span></button></div>
+  </section>
 
-    <section class="section">
-      <div class="section-title"><b>Аккаунт</b><span>Telegram</span></div>
-      <div class="profile">
-        <div class="avatar" id="avatar">P</div>
-        <div><b id="name">Пользователь Telegram</b><span id="username">Mini App PopNew</span></div>
-      </div>
-      <p class="hint">Интерфейс работает внутри Telegram и автоматически подстраивается под безопасную область экрана.</p>
-    </section>
-  </main>
+  <section id="profile" class="page"><div class="section"><div class="title"><b>Профиль</b><span>Telegram</span></div><div class="panel"><div class="row"><span>Имя</span><b id="pname">—</b></div><div class="row"><span>Username</span><b id="pusername">—</b></div><div class="row"><span>Баланс</span><b id="pbalance">0 ⭐</b></div><div class="row"><span>Рефералы</span><b id="pref">0</b></div><div class="row"><span>Заработано</span><b id="pearned">0 ⭐</b></div><div class="row"><span>TON-адрес</span><b id="pton">—</b></div></div></div></section>
 
-  <nav class="nav">
-    <button class="active" onclick="home(this)"><i>⌂</i>Главная</button>
-    <button onclick="freeCase()"><i>🎁</i>Кейс</button>
-    <button onclick="battle()"><i>⚔️</i>Баттлы</button>
-    <button onclick="profile()"><i>👤</i>Профиль</button>
-  </nav>
-  <div class="toast" id="toast"></div>
+  <section id="refs" class="page"><div class="section"><div class="title"><b>Рефералы</b><span>Приглашай друзей</span></div><div class="panel"><div class="row"><span>Приглашено</span><b id="rcount">0</b></div><div class="row"><span>Заработано</span><b id="rearned">0 ⭐</b></div><input class="input" id="reflink" readonly value="Загрузка..."><button class="btn primary" style="width:100%;margin-top:9px" onclick="shareRef()">📤 Поделиться ссылкой</button><button class="btn" style="width:100%;margin-top:9px" onclick="confirmShare()">✅ Я поделился</button><div class="muted" style="margin-top:10px;text-align:center">Для бесплатного кейса нужно 2 подтверждения.</div></div></div></section>
 
-  <script>
-    const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
-    if (tg) {
-      tg.ready();
-      tg.expand();
-      tg.setHeaderColor('#17112b');
-      tg.setBackgroundColor('#0d0918');
-      const u = tg.initDataUnsafe && tg.initDataUnsafe.user;
-      if (u) {
-        document.getElementById('name').textContent = [u.first_name, u.last_name].filter(Boolean).join(' ') || 'Пользователь Telegram';
-        document.getElementById('username').textContent = u.username ? '@' + u.username : 'Telegram';
-        if (u.photo_url) document.getElementById('avatar').innerHTML = '<img src="' + u.photo_url + '" alt="">';
-        else document.getElementById('avatar').textContent = (u.first_name || 'P')[0].toUpperCase();
-      }
-    }
-    function toast(text) {
-      const el = document.getElementById('toast'); el.textContent = text; el.classList.add('show');
-      clearTimeout(window.__toast); window.__toast = setTimeout(() => el.classList.remove('show'), 2200);
-      if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-    }
-    function home() { toast('🏠 Вы на главной'); }
-    function deposit() { toast('💎 Пополнение откроется через бота'); if (tg) setTimeout(() => tg.close(), 700); }
-    function freeCase() { toast('🎁 Бесплатный кейс доступен через бота'); if (tg) setTimeout(() => tg.close(), 700); }
-    function battle() { toast('⚔️ Баттлы откроются через бота'); if (tg) setTimeout(() => tg.close(), 700); }
-    function referrals() { toast('👥 Реферальная система доступна в боте'); if (tg) setTimeout(() => tg.close(), 700); }
-    function profile() { toast('👤 Профиль доступен в боте'); if (tg) setTimeout(() => tg.close(), 700); }
-  </script>
+  <section id="battles" class="page"><div class="title"><b>⚔️ Баттлы</b><button class="btn" style="padding:7px 10px" onclick="loadBattles()">↻</button></div><div class="panel"><div class="stack"><select class="input" id="battleCurrency"><option value="stars">⭐ Stars</option><option value="ton">💎 TON</option></select><input class="input" id="maxPlayers" type="number" min="2" max="10" value="10"><button class="btn primary" onclick="createBattle()">＋ Создать баттл</button></div></div><div class="section" id="battleList"></div></section>
+</div>
+
+<nav class="bottom"><button class="active" data-page="home" onclick="showPage('home',this)"><i>⌂</i>Главная</button><button data-page="home" onclick="freeCase()"><i>🎁</i>Кейс</button><button data-page="battles" onclick="showPage('battles',this)"><i>⚔️</i>Баттлы</button><button data-page="profile" onclick="showPage('profile',this)"><i>👤</i>Профиль</button></nav>
+<div class="toast" id="toast"></div>
+<div class="modal" id="depositModal"><div class="sheet"><button class="close" onclick="closeDeposit()">✕</button><h3>💎 Пополнение Stars</h3><div class="amounts"><button onclick="makeDeposit(10)">10 ⭐</button><button onclick="makeDeposit(25)">25 ⭐</button><button onclick="makeDeposit(50)">50 ⭐</button><button onclick="makeDeposit(100)">100 ⭐</button></div><div id="depositInfo" class="muted" style="margin-top:12px"></div></div></div>
+
+<script>
+const tg=window.Telegram?.WebApp; if(tg){tg.ready();tg.expand();tg.setHeaderColor('#171027');tg.setBackgroundColor('#0d0817');tg.setBottomBarColor('#171027')}
+const headers=()=>tg?.initData?{'X-Telegram-Init-Data':tg.initData}:{'X-Telegram-Init-Data':''};
+const toast=t=>{const e=document.getElementById('toast');e.textContent=t;e.classList.add('show');clearTimeout(window.__t);window.__t=setTimeout(()=>e.classList.remove('show'),2300);if(tg?.HapticFeedback)tg.HapticFeedback.impactOccurred('light')};
+async function api(path,opts={}){opts.headers={...headers(),...(opts.headers||{}),'Content-Type':'application/json'};const r=await fetch(path,opts);let d={};try{d=await r.json()}catch{}if(!r.ok)throw Error(d.message||'Ошибка сервера');return d}
+function showPage(id,btn){document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.bottom button').forEach(x=>x.classList.remove('active'));(btn||document.querySelector(`.bottom button[data-page="${id}"]`))?.classList.add('active');if(id==='profile')loadProfile();if(id==='refs')loadRefs();if(id==='battles')loadBattles()}
+async function loadProfile(){try{const d=await api('/api/me');const p=d.profile,u=d.user;document.getElementById('balance').innerHTML=`${p.balance} <small>⭐</small>`;document.getElementById('pbalance').textContent=p.balance+' ⭐';document.getElementById('pname').textContent=[u.first_name,u.last_name].filter(Boolean).join(' ')||'—';document.getElementById('pusername').textContent=u.username?'@'+u.username:'—';document.getElementById('pref').textContent=d.ref_count;document.getElementById('pearned').textContent=d.ref_earned+' ⭐';document.getElementById('pton').textContent=p.ton_address||'—';if(u.photo_url)document.getElementById('avatar').innerHTML=`<img src="${u.photo_url}" alt="">`;else document.getElementById('avatar').textContent=(u.first_name||'P')[0].toUpperCase()}catch(e){toast(e.message)}}
+async function loadRefs(){try{const d=await api('/api/referrals');document.getElementById('rcount').textContent=d.count;document.getElementById('rearned').textContent=d.earned+' ⭐';document.getElementById('reflink').value=d.link}catch(e){toast(e.message)}}
+async function confirmShare(){try{const d=await api('/api/share',{method:'POST',body:'{}'});toast('✅ Прогресс: '+d.shared_count+'/2')}catch(e){toast(e.message)}}
+function shareRef(){const link=document.getElementById('reflink').value;if(tg?.openTelegramLink)tg.openTelegramLink('https://t.me/share/url?'+new URLSearchParams({url:link,text:'Заходи в PopNew 🎁'}));else navigator.clipboard?.writeText(link).then(()=>toast('Ссылка скопирована'))}
+async function freeCase(){try{const d=await api('/api/free-case',{method:'POST',body:'{}'});if(d.ok){toast(`🎉 +${d.reward} ⭐`);loadProfile();showPage('home')}else{toast(d.message);if(d.need_share)showPage('refs')}}catch(e){toast(e.message)}}
+function openDeposit(){document.getElementById('depositModal').classList.add('show')}function closeDeposit(){document.getElementById('depositModal').classList.remove('show')}
+async function makeDeposit(amount){try{const d=await api('/api/deposit',{method:'POST',body:JSON.stringify({amount})});if(!d.ok)return toast(d.message);document.getElementById('depositInfo').innerHTML=`Переведи <b>${d.ton.toFixed(4)} TON</b>.<br><br>Комментарий: <b>${d.comment}</b><br><br><button class="btn primary" style="width:100%" onclick="openTon('${encodeURIComponent(d.ton_link)}',${d.amount},'${d.comment}')">Открыть Tonkeeper</button><button class="btn" style="width:100%;margin-top:8px" onclick="checkDeposit(${d.amount},'${d.comment}')">Проверить оплату</button>`}catch(e){toast(e.message)}}
+function openTon(link){if(tg?.openLink)tg.openLink(decodeURIComponent(link));else location.href=decodeURIComponent(link)}
+async function checkDeposit(amount,comment){try{const d=await api('/api/deposit/check',{method:'POST',body:JSON.stringify({amount,comment})});toast(d.message);if(d.ok){closeDeposit();loadProfile()}}catch(e){toast(e.message)}}
+async function loadBattles(){try{const d=await api('/api/battles');const el=document.getElementById('battleList');if(!d.battles.length){el.innerHTML='<div class="empty">Пока нет открытых баттлов.<br>Создай первый 👑</div>';return}el.innerHTML=d.battles.map(b=>`<div class="battle"><div class="battle-head"><b>#${b.battle_id} · ${b.currency==='stars'?'⭐ Stars':'💎 TON'}</b><span class="badge">${b.max_players} игроков</span></div><div class="muted" style="margin-top:8px">Банк: ${b.currency==='stars'?b.bank_stars+' ⭐':b.bank_ton.toFixed(4)+' TON'} · ${b.hash}</div>${b.currency==='stars'?`<div style="display:flex;gap:8px;margin-top:10px"><input class="input" style="margin:0" id="bet${b.battle_id}" type="number" min="1" placeholder="Ставка ⭐"><button class="btn primary" onclick="joinBattle(${b.battle_id})">Играть</button></div>`:''}</div>`).join('')}catch(e){toast(e.message)}}
+async function createBattle(){try{const d=await api('/api/battles',{method:'POST',body:JSON.stringify({currency:document.getElementById('battleCurrency').value,max_players:document.getElementById('maxPlayers').value})});toast(d.ok?'✅ Баттл создан':'❌ '+d.message);loadBattles()}catch(e){toast(e.message)}}
+async function joinBattle(id){const amount=Number(document.getElementById('bet'+id).value);if(!amount)return toast('Укажи ставку');try{const d=await api('/api/battles/join',{method:'POST',body:JSON.stringify({battle_id:id,amount})});toast(d.message);loadBattles();loadProfile()}catch(e){toast(e.message)}}
+loadProfile();
+</script>
 </body>
 </html>
