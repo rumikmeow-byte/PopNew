@@ -15,7 +15,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
 from config import BOT_TOKEN, BOT_WALLET_ADDRESS, MAX_DEPOSIT_STARS, MIN_DEPOSIT_STARS, MIN_DEPOSIT_TON, TON_TO_STARS_RATE
-from db import init_db, get_user, get_referral_stats, update_balance, set_free_case_time, reset_share_count, increment_share_count, create_battle, add_player_to_battle, get_battle_info, get_active_battles
+from db import init_db, get_user, get_referral_stats, update_balance, set_free_case_time, reset_share_count, increment_share_count, create_battle, add_player_to_battle, get_battle_info, get_active_battles, get_battle_players
 from user_handlers import handlers_router
 from admin_handlers import admin_router
 from payments import payments_router, init_payment_db, register_payment_routes, record_ton_payment, confirm_ton_payment, payment_is_confirmed
@@ -173,7 +173,11 @@ async def api_check_deposit(request: web.Request):
 async def api_battles(request: web.Request):
     validate_webapp_user(request)
     rows = await get_active_battles()
-    return web.json_response({"battles": [{"battle_id": r[0], "creator_id": r[1], "currency": r[2], "bank_stars": r[3], "bank_ton": r[4], "hash": r[5], "max_players": r[6]} for r in rows]})
+    battles = []
+    for r in rows:
+        players = await get_battle_players(r[0])
+        battles.append({"battle_id": r[0], "creator_id": r[1], "currency": r[2], "bank_stars": r[3], "bank_ton": r[4], "hash": r[5], "max_players": r[6], "players_count": len(players)})
+    return web.json_response({"battles": battles})
 
 
 async def api_create_battle(request: web.Request):
