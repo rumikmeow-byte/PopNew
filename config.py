@@ -27,14 +27,17 @@ def get_float(name: str, default: float = 0.0) -> float:
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = get_int("ADMIN_ID", 0)
-BOT_NAME = os.getenv("BOT_NAME", "PopNew")
+BOT_NAME = os.getenv("BOT_NAME", "GIFTSMMS")
 DB_NAME = os.getenv("DB_NAME", "data/bot.db")
 TON_API_KEY = os.getenv("TON_API_KEY")
 BOT_WALLET_MNEMONIC = os.getenv("BOT_WALLET_MNEMONIC")
 BOT_WALLET_ADDRESS = os.getenv("BOT_WALLET_ADDRESS", "")
 
-MAX_DEPOSIT_STARS = get_int("MAX_DEPOSIT_STARS", 100)
-MIN_DEPOSIT_STARS = get_int("MIN_DEPOSIT_STARS", 15)
+# Telegram Stars are the payment rail for digital goods/services inside Telegram.
+MAX_DEPOSIT_STARS = get_int("MAX_DEPOSIT_STARS", 100000)
+MIN_DEPOSIT_STARS = get_int("MIN_DEPOSIT_STARS", 25)
+
+# Kept for legacy TON/wallet code; TON is not used as the in-app digital-goods payment rail.
 MIN_DEPOSIT_TON = get_float("MIN_DEPOSIT_TON", 0.1)
 TON_TO_STARS_RATE = get_float("TON_TO_STARS_RATE", 1.0)
 
