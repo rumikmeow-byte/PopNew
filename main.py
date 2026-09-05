@@ -7,14 +7,22 @@ import os
 import sys
 import time
 from pathlib import Path
-from urllib.parse import parse_qsl, urlencode
+from urllib.parse import parse_qsl
 
 from aiohttp import web
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
-from config import BOT_TOKEN, BOT_WALLET_ADDRESS, MAX_DEPOSIT_STARS, MIN_DEPOSIT_STARS, MIN_DEPOSIT_TON, TON_TO_STARS_RATE
+from config import (
+    BOT_TOKEN,
+    BOT_WALLET_ADDRESS,
+    DB_NAME,
+    MAX_DEPOSIT_STARS,
+    MIN_DEPOSIT_STARS,
+    MIN_DEPOSIT_TON,
+    TON_TO_STARS_RATE,
+)
 from db import (
     init_db,
     get_user,
@@ -34,12 +42,13 @@ from db import (
 )
 from user_handlers import handlers_router
 from admin_handlers import admin_router
-from payments import payments_router, init_payment_db, register_payment_routes, record_ton_payment, confirm_ton_payment, payment_is_confirmed
-from utils import check_all_subscriptions, check_transaction
+from payments import payments_router, init_payment_db, register_payment_routes, api_stars_invoice
+from utils import check_all_subscriptions
+from crash_engine import init_crash_db, register_crash_routes
 
 BASE_DIR = Path(__file__).resolve().parent
 REQUIRED_CASE_CHANNEL = "eclipsedlf"
-APP_NAME = "GiftsMMS"
+APP_NAME = "GIFTSMMS"
 
 
 def validate_webapp_user(request: web.Request):
@@ -76,18 +85,27 @@ async def handle_index(request: web.Request):
 
 
 async def handle_ton_manifest(request: web.Request):
-    return web.json_response({"url": str(request.url.with_path("/").with_query("")), "name": APP_NAME, "iconUrl": str(request.url.with_path("/icon-180.png").with_query(""))})
+    return web.json_response({
+        "url": str(request.url.with_path("/").with_query("")),
+        "name": APP_NAME,
+        "iconUrl": str(request.url.with_path("/icon-180.png").with_query("")),
+    })
 
 
 async def health(request: web.Request):
-    return web.json_response({"status": "ok"})
+    return web.json_response({"status": "ok", "app": APP_NAME})
 
 
 async def api_me(request: web.Request):
     user_id, tg_user = validate_webapp_user(request)
     user = await get_user(user_id)
     ref_count, ref_earned = await get_referral_stats(user_id)
-    return web.json_response({"user": tg_user, "profile": user, "ref_count": ref_count, "ref_earned": ref_earned})
+    return web.json_response({
+        "user": tg_user,
+        "profile": user,
+        "ref_count": ref_count,
+        "ref_earned": ref_earned,
+    })
 
 
 async def api_share(request: web.Request):
@@ -113,7 +131,12 @@ async def api_case_access(request: web.Request):
     subscribed = await case_subscription_ok(request.app["bot"], user_id)
     user = await get_user(user_id)
     available = int(time.time()) - user["free_case_time"] >= 86400
-    return web.json_response({"ok": subscribed and available, "subscribed": subscribed, "available": available, "channel": REQUIRED_CASE_CHANNEL})
+    return web.json_response({
+        "ok": subscribed and available,
+        "subscribed": subscribed,
+        "available": available,
+        "channel": REQUIRED_CASE_CHANNEL,
+    })
 
 
 async def api_free_case(request: web.Request):
@@ -127,7 +150,11 @@ async def api_free_case(request: web.Request):
     if not await check_all_subscriptions(request.app["bot"], user_id):
         return web.json_response({"ok": False, "message": "Сначала подпишитесь на обязательные каналы."})
     if user["shared_count"] < 2:
-        return web.json_response({"ok": False, "message": f"Сначала поделитесь ссылкой 2 раза. Прогресс: {user['shared_count']}/2", "need_share": True})
+        return web.json_response({
+            "ok": False,
+            "message": f"Сначала поделитесь ссылкой 2 раза. Прогресс: {user['shared_count']}/2",
+            "need_share": True,
+        })
     import random
     reward = random.choice([1, 5, 10])
     await update_balance(user_id, reward)
@@ -140,53 +167,30 @@ async def api_referrals(request: web.Request):
     user_id, _ = validate_webapp_user(request)
     count, earned = await get_referral_stats(user_id)
     bot_info = await request.app["bot"].get_me()
-    return web.json_response({"count": count, "earned": earned, "link": f"https://t.me/{bot_info.username}?start=ref_{user_id}"})
+    return web.json_response({
+        "count": count,
+        "earned": earned,
+        "link": f"https://t.me/{bot_info.username}?start=ref_{user_id}",
+    })
 
 
 async def api_deposit(request: web.Request):
-    user_id, _ = validate_webapp_user(request)
-    body = await request.json()
-    try:
-        amount = int(body.get("amount", 0))
-    except (TypeError, ValueError):
-        amount = 0
-    if amount < MIN_DEPOSIT_STARS:
-        return web.json_response({"ok": False, "message": f"Минимальное пополнение — {MIN_DEPOSIT_STARS} ⭐ или {MIN_DEPOSIT_TON:g} TON."})
-    if amount > MAX_DEPOSIT_STARS:
-        return web.json_response({"ok": False, "message": f"Максимальное пополнение — {MAX_DEPOSIT_STARS} ⭐."})
-    if not BOT_WALLET_ADDRESS or TON_TO_STARS_RATE <= 0:
-        return web.json_response({"ok": False, "message": "Пополнение TON пока не настроено."})
-    ton_amount = max(amount / TON_TO_STARS_RATE, MIN_DEPOSIT_TON)
-    credited_stars = max(amount, int(ton_amount * TON_TO_STARS_RATE))
-    comment = f"dep_{user_id}_{credited_stars}_{int(time.time())}"
-    await record_ton_payment(user_id, credited_stars, comment)
-    ton_link = f"ton://transfer/{BOT_WALLET_ADDRESS}?{urlencode({'amount': int(ton_amount * 1e9), 'text': comment})}"
-    return web.json_response({"ok": True, "amount": credited_stars, "ton": ton_amount, "rate": TON_TO_STARS_RATE, "min_stars": MIN_DEPOSIT_STARS, "min_ton": MIN_DEPOSIT_TON, "comment": comment, "address": BOT_WALLET_ADDRESS, "ton_link": ton_link})
+    # Compatibility alias: in Telegram Mini Apps, digital services are paid with Stars.
+    return await api_stars_invoice(request)
 
 
 async def api_check_deposit(request: web.Request):
-    user_id, _ = validate_webapp_user(request)
-    body = await request.json()
-    comment = str(body.get("comment", ""))
-    try:
-        amount = int(body.get("amount", 0))
-    except (TypeError, ValueError):
-        amount = 0
-    if not comment.startswith(f"dep_{user_id}_") or amount < MIN_DEPOSIT_STARS:
-        return web.json_response({"ok": False, "message": "Некорректный платёж или сумма меньше минимальной."})
-    if await payment_is_confirmed(f"ton:{comment}", user_id):
-        return web.json_response({"ok": True, "message": "Этот TON-платёж уже зачислен.", "profile": await get_user(user_id)})
-    ton_amount = max(amount / TON_TO_STARS_RATE, MIN_DEPOSIT_TON)
-    if await check_transaction(comment, ton_amount):
-        if await confirm_ton_payment(user_id, comment):
-            await update_balance(user_id, amount)
-            return web.json_response({"ok": True, "message": f"Баланс пополнен на {amount} ⭐.", "profile": await get_user(user_id)})
-        return web.json_response({"ok": True, "message": "Этот TON-платёж уже зачислен.", "profile": await get_user(user_id)})
-    return web.json_response({"ok": False, "message": "Платёж пока не найден."})
+    validate_webapp_user(request)
+    return web.json_response({
+        "ok": False,
+        "message": "Проверка TON-депозита отключена. Используйте Telegram Stars для пополнения GIFTSMMS.",
+    })
 
 
 async def api_battles(request: web.Request):
     validate_webapp_user(request)
+    await start_ready_battles(start_delay=3)
+    await resolve_finished_battles(round_seconds=8)
     rows = await get_active_battles()
     battles = []
     for r in rows:
@@ -215,6 +219,8 @@ async def api_battle(request: web.Request):
         battle_id = int(request.match_info["battle_id"])
     except (TypeError, ValueError):
         raise web.HTTPBadRequest(text="Некорректный battle_id")
+    await start_ready_battles(start_delay=3)
+    await resolve_finished_battles(round_seconds=8)
     snapshot = await get_battle_snapshot(battle_id)
     if not snapshot:
         raise web.HTTPNotFound(text="Батл не найден")
@@ -229,8 +235,9 @@ async def api_create_battle(request: web.Request):
         max_players = max(2, min(10, int(body.get("max_players", 10))))
     except (TypeError, ValueError):
         max_players = 10
-    if currency not in ("stars", "ton"):
-        return web.json_response({"ok": False, "message": "Неверная валюта."})
+    # Real-value game currency is Stars; TON remains a wallet-only integration.
+    if currency != "stars":
+        return web.json_response({"ok": False, "message": "GIFTSMMS battles use Telegram Stars."})
     battle_id = await create_battle(user_id, currency, max_players)
     return web.json_response({"ok": True, "battle_id": battle_id})
 
@@ -243,11 +250,11 @@ async def api_join_battle(request: web.Request):
         amount = int(body.get("amount", 0))
     except (TypeError, ValueError):
         return web.json_response({"ok": False, "message": "Некорректные данные."})
+    if amount < MIN_DEPOSIT_STARS or amount > MAX_DEPOSIT_STARS:
+        return web.json_response({"ok": False, "message": f"Ставка: от {MIN_DEPOSIT_STARS} до {MAX_DEPOSIT_STARS} ⭐."})
     battle = await get_battle_info(battle_id)
-    if not battle or amount <= 0:
-        return web.json_response({"ok": False, "message": "Батл не найден или ставка неверна."})
-    if battle["currency"] != "stars":
-        return web.json_response({"ok": False, "message": "TON-игры пока работают только в демо-режиме."})
+    if not battle or battle["currency"] != "stars":
+        return web.json_response({"ok": False, "message": "Батл не найден."})
     user = await get_user(user_id)
     if user["balance"] < amount:
         return web.json_response({"ok": False, "message": "Недостаточно ⭐."})
@@ -255,19 +262,19 @@ async def api_join_battle(request: web.Request):
     ok, message = await add_player_to_battle(battle_id, user_id, bet_stars=amount)
     if not ok:
         await update_balance(user_id, amount)
-    return web.json_response({"ok": ok, "message": message, "battle": await get_battle_snapshot(battle_id) if ok else None})
+    return web.json_response({
+        "ok": ok,
+        "message": message,
+        "battle": await get_battle_snapshot(battle_id) if ok else None,
+    })
 
 
 async def battle_engine_loop():
-    logging.info("Battle engine started")
+    logging.info("GIFTSMMS battle engine started")
     while True:
         try:
-            started = await start_ready_battles(start_delay=3)
-            if started:
-                logging.info("Battles started: %s", started)
-            resolved = await resolve_finished_battles(round_seconds=8)
-            if resolved:
-                logging.info("Battles resolved: %s", resolved)
+            await start_ready_battles(start_delay=3)
+            await resolve_finished_battles(round_seconds=8)
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -279,11 +286,14 @@ async def main():
     logging.info("Starting %s...", APP_NAME)
     await init_db()
     await init_payment_db()
+    await init_crash_db(DB_NAME)
+
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
     dp.include_router(handlers_router)
     dp.include_router(admin_router)
     dp.include_router(payments_router)
+
     app = web.Application()
     app["bot"] = bot
     app.router.add_get("/", handle_index)
@@ -301,16 +311,18 @@ async def main():
     app.router.add_post("/api/battles", api_create_battle)
     app.router.add_post("/api/battles/join", api_join_battle)
     register_payment_routes(app)
+    register_crash_routes(app, DB_NAME, validate_webapp_user)
+
     port = int(os.getenv("PORT", "10000"))
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, host="0.0.0.0", port=port)
     await site.start()
     engine_task = asyncio.create_task(battle_engine_loop())
-    logging.info("Web server started on 0.0.0.0:%s", port)
+    logging.info("GIFTSMMS web server started on 0.0.0.0:%s", port)
     try:
         await bot.delete_webhook(drop_pending_updates=True)
-        logging.info("Bot started")
+        logging.info("GIFTSMMS bot started")
         await dp.start_polling(bot)
     except asyncio.CancelledError:
         logging.info("Bot stopping...")
