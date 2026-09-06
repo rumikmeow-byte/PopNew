@@ -27,10 +27,10 @@ async def init_db():
             """
             CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY,
-                balance INTEGER DEFAULT 0,
+                balance REAL DEFAULT 0,
                 ton_balance REAL DEFAULT 0,
                 ref_count INTEGER DEFAULT 0,
-                ref_earned INTEGER DEFAULT 0,
+                ref_earned REAL DEFAULT 0,
                 free_case_time INTEGER DEFAULT 0,
                 ton_address TEXT DEFAULT NULL,
                 shared_count INTEGER DEFAULT 0,
@@ -39,6 +39,8 @@ async def init_db():
             """
         )
         await _ensure_column(db, "users", "ton_balance", "REAL DEFAULT 0")
+        await _ensure_column(db, "users", "balance", "REAL DEFAULT 0")
+        await _ensure_column(db, "users", "ref_earned", "REAL DEFAULT 0")
 
         await db.execute(
             """
@@ -58,10 +60,7 @@ async def init_db():
             )
             """
         )
-        await db.execute(
-            "INSERT OR IGNORE INTO channels (username) VALUES (?)",
-            ("eclipsedlf",),
-        )
+        await db.execute("INSERT OR IGNORE INTO channels (username) VALUES (?)", ("eclipsedlf",))
 
         await db.execute(
             """
@@ -71,7 +70,7 @@ async def init_db():
                 currency TEXT,
                 status TEXT DEFAULT 'waiting',
                 max_players INTEGER DEFAULT 10,
-                total_bank_stars INTEGER DEFAULT 0,
+                total_bank_stars REAL DEFAULT 0,
                 total_bank_ton REAL DEFAULT 0,
                 hash TEXT,
                 winner_id INTEGER DEFAULT NULL,
@@ -90,7 +89,7 @@ async def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 battle_id INTEGER,
                 user_id INTEGER,
-                bet_stars INTEGER DEFAULT 0,
+                bet_stars REAL DEFAULT 0,
                 bet_ton REAL DEFAULT 0,
                 ton_address TEXT DEFAULT NULL,
                 joined_at INTEGER,
@@ -114,7 +113,6 @@ async def init_db():
             )
             """
         )
-
         await db.commit()
 
 
@@ -177,20 +175,14 @@ async def update_balance(user_id: int, amount: float, commission: float = 0.0):
     if amount > 0 and commission > 0:
         amount = amount * (1 - commission)
     async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute(
-            "UPDATE users SET balance = balance + ? WHERE user_id = ?",
-            (amount, user_id),
-        )
+        await db.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (amount, user_id))
         await db.commit()
     return amount
 
 
 async def update_ton_balance(user_id: int, amount: float):
     async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute(
-            "UPDATE users SET ton_balance = ton_balance + ? WHERE user_id = ?",
-            (amount, user_id),
-        )
+        await db.execute("UPDATE users SET ton_balance = ton_balance + ? WHERE user_id = ?", (amount, user_id))
         await db.commit()
     return amount
 
@@ -233,7 +225,7 @@ async def add_referral(inviter_id: int, invited_id: int):
         if cursor.rowcount <= 0:
             return False
         await db.execute(
-            "UPDATE users SET balance = balance + 1, ref_count = ref_count + 1, ref_earned = ref_earned + 1 WHERE user_id = ?",
+            "UPDATE users SET balance = balance + 2, ref_count = ref_count + 1, ref_earned = ref_earned + 2 WHERE user_id = ?",
             (inviter_id,),
         )
         await db.commit()
@@ -261,10 +253,7 @@ async def add_channel(username: str):
     if not username:
         return False
     async with aiosqlite.connect(DB_NAME) as db:
-        cursor = await db.execute(
-            "INSERT OR IGNORE INTO channels (username) VALUES (?)",
-            (username,),
-        )
+        cursor = await db.execute("INSERT OR IGNORE INTO channels (username) VALUES (?)", (username,))
         await db.commit()
         return cursor.rowcount > 0
 
@@ -274,15 +263,12 @@ async def remove_channel(username: str):
     if not username:
         return False
     async with aiosqlite.connect(DB_NAME) as db:
-        cursor = await db.execute(
-            "DELETE FROM channels WHERE username = ?",
-            (username,),
-        )
+        cursor = await db.execute("DELETE FROM channels WHERE username = ?", (username,))
         await db.commit()
         return cursor.rowcount > 0
 
 
-# Compatibility for legacy handlers. Real Stars/TON battle wagering is disabled.
+# Compatibility for legacy handlers. The active game engines use their own transactional methods.
 async def create_battle(*args, **kwargs):
     return None
 
