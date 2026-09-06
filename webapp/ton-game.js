@@ -1,117 +1,28 @@
 (() => {
   const tg = window.Telegram?.WebApp;
   const auth = () => ({'Content-Type':'application/json','X-Telegram-Init-Data':tg?.initData||''});
-  const api = async (path, options={}) => {
-    const r = await fetch(path, {...options, headers:{...auth(),...(options.headers||{})}});
-    const data = await r.json().catch(()=>({ok:false,message:'Ошибка сервера'}));
-    if (!r.ok) throw new Error(data.message || 'Ошибка запроса');
-    return data;
-  };
-  const $ = s => document.querySelector(s);
-  const toast = m => window.toast ? window.toast(m) : alert(m);
-  let mode='stars', tonBet=0.1, tonDeposit=0.1, poll=null;
+  const api = async (path, options={}) => { const r=await fetch(path,{...options,headers:{...auth(),...(options.headers||{})}}); const data=await r.json().catch(()=>({ok:false,message:'Ошибка сервера'})); if(!r.ok)throw new Error(data.message||'Ошибка запроса'); return data; };
+  const $=s=>document.querySelector(s); const toast=m=>window.toast?window.toast(m):alert(m);
+  let mode='stars',tonBet=0.1,tonDeposit=0.1,poll=null;
 
-  function style(){
-    const css=document.createElement('style'); css.id='ton-game-style';
-    css.textContent=`
-      .currency-switch{display:flex;gap:6px;margin:3px 18px 10px;padding:4px;border-radius:14px;background:#17171b}
-      .currency-switch button{flex:1;height:38px;border:0;border-radius:11px;background:transparent;color:#85868d;font-weight:900;font-size:14px}
-      .currency-switch button.active{background:#fff;color:#111;box-shadow:0 4px 14px #0006}
-      .ton-badge{display:inline-flex;align-items:center;gap:5px;margin-left:6px;padding:4px 8px;border-radius:9px;background:#1e9bd7;color:#fff;font-size:12px;font-weight:900}
-      .ton-bet-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0}
-      .ton-bet-grid button{height:52px;border:0;border-radius:15px;background:#25262b;color:#fff;font-weight:900}
-      .ton-bet-grid button.active{background:#fff;color:#111}
-      .ton-modal .sheet-inner{padding-bottom:calc(14px + env(safe-area-inset-bottom));}
-      .ton-modal h3{margin:0 0 7px;font-size:23px;text-align:center}
-      .ton-muted{color:#92939a;font-size:13px;line-height:1.35;margin:0 0 13px;text-align:center}
-      .ton-input{width:100%;height:48px;border:1px solid #ffffff12;border-radius:14px;background:#202126;color:#fff;padding:0 14px;font-size:16px;outline:0;margin-bottom:10px}
-      .ton-address{font-size:11px;color:#8f9097;word-break:break-all;background:#16171b;border-radius:12px;padding:10px;margin:10px 0}
-      .compact-ton-card{margin:12px 18px 0;padding:16px;border-radius:23px;background:#1a1a1f}
-      .compact-ton-card .ct-head{display:flex;justify-content:space-between;align-items:center;font-weight:900;font-size:16px}
-      .compact-ton-card .ct-value{font-size:22px;margin-top:7px}
-      .compact-ton-card .ct-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
-      .compact-ton-card button{height:44px;border:0;border-radius:14px;background:#292a2f;color:#fff;font-weight:850}
-      .compact-ton-card button.primary{background:#fff;color:#111}
-      @media(max-width:390px){.currency-switch{margin-left:12px;margin-right:12px}.ton-bet-grid{grid-template-columns:repeat(2,1fr)}.compact-ton-card{margin-left:12px;margin-right:12px}}
-    `; document.head.appendChild(css);
-  }
+  function style(){const css=document.createElement('style');css.id='ton-game-style';css.textContent=`
+    .currency-switch{display:flex;gap:6px;margin:3px 18px 10px;padding:4px;border-radius:14px;background:#17171b}.currency-switch button{flex:1;height:38px;border:0;border-radius:11px;background:transparent;color:#85868d;font-weight:900;font-size:14px}.currency-switch button.active{background:#fff;color:#111;box-shadow:0 4px 14px #0006}.ton-badge{display:inline-flex;align-items:center;gap:5px;margin-left:6px;padding:4px 8px;border-radius:9px;background:#1e9bd7;color:#fff;font-size:12px;font-weight:900}.ton-bet-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0}.ton-bet-grid button{height:52px;border:0;border-radius:15px;background:#25262b;color:#fff;font-weight:900}.ton-bet-grid button.active{background:#fff;color:#111}.ton-modal .sheet-inner{padding-bottom:calc(14px + env(safe-area-inset-bottom))}.ton-modal h3{margin:0 0 7px;font-size:23px;text-align:center}.ton-muted{color:#92939a;font-size:13px;line-height:1.35;margin:0 0 13px;text-align:center}.ton-input{width:100%;height:48px;border:1px solid #ffffff12;border-radius:14px;background:#202126;color:#fff;padding:0 14px;font-size:16px;outline:0;margin-bottom:10px}.ton-address{font-size:11px;color:#8f9097;white-space:pre-line;word-break:break-all;background:#16171b;border-radius:12px;padding:10px;margin:10px 0}.compact-ton-card{margin:12px 18px 0;padding:16px;border-radius:23px;background:#1a1a1f}.compact-ton-card .ct-head{display:flex;justify-content:space-between;align-items:center;font-weight:900;font-size:16px}.compact-ton-card .ct-value{font-size:22px;margin-top:7px}.compact-ton-card .ct-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.compact-ton-card button{height:44px;border:0;border-radius:14px;background:#292a2f;color:#fff;font-weight:850}.compact-ton-card button.primary{background:#fff;color:#111}@media(max-width:390px){.currency-switch{margin-left:12px;margin-right:12px}.ton-bet-grid{grid-template-columns:repeat(2,1fr)}.compact-ton-card{margin-left:12px;margin-right:12px}}
+  `;document.head.appendChild(css)}
 
-  function addSwitch(){
-    const games=$('#games'); if(!games || $('#currencySwitch')) return;
-    const bar=document.createElement('div'); bar.id='currencySwitch'; bar.className='currency-switch';
-    bar.innerHTML='<button data-mode="stars" class="active">⭐ Stars</button><button data-mode="ton">💎 TON</button>';
-    const target=games.querySelector('.total-row'); target?.insertAdjacentElement('beforebegin',bar);
-    bar.querySelectorAll('button').forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
-  }
-
-  function addTonProfile(){
-    const profile=$('#profile'); if(!profile || $('#tonProfileCard')) return;
-    const card=document.createElement('div'); card.id='tonProfileCard'; card.className='compact-ton-card';
-    card.innerHTML='<div class="ct-head"><span>💎 TON баланс</span><span class="ton-badge">TON</span></div><div class="ct-value"><span id="tonBalance">0</span> TON</div><div class="ct-actions"><button class="primary" id="tonDepositBtn">Пополнить</button><button id="tonWithdrawBtn">Вывод</button></div>';
-    const invite=profile.querySelector('.invite'); invite?.insertAdjacentElement('beforebegin',card);
-    $('#tonDepositBtn').onclick=openDeposit; $('#tonWithdrawBtn').onclick=()=>toast('Вывод TON подготовлен. Сначала укажи TON-адрес в поддержке.');
-  }
-
-  function setMode(next){
-    mode=next; document.querySelectorAll('#currencySwitch button').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));
-    const top=$('#bankTop'); if(top) top.previousElementSibling?.replaceWith(Object.assign(document.createElement('span'),{className:'gold',textContent:mode==='ton'?'💎':'⭐'}));
-    const cta=$('#joinBtn'); if(cta) cta.textContent=mode==='ton'?'💎 Играть за TON':'⭐ Сделать ставку';
-    if(mode==='ton'){loadTonBattle();startTonPolling();} else stopTonPolling();
-  }
+  function addSwitch(){const games=$('#games');if(!games||$('#currencySwitch'))return;const bar=document.createElement('div');bar.id='currencySwitch';bar.className='currency-switch';bar.innerHTML='<button data-mode="stars" class="active">⭐ Stars</button><button data-mode="ton">💎 TON</button>';const target=games.querySelector('.total-row');target?.insertAdjacentElement('beforebegin',bar);bar.querySelectorAll('button').forEach(b=>b.onclick=()=>setMode(b.dataset.mode))}
+  function addTonProfile(){const profile=$('#profile');if(!profile||$('#tonProfileCard'))return;const card=document.createElement('div');card.id='tonProfileCard';card.className='compact-ton-card';card.innerHTML='<div class="ct-head"><span>💎 TON баланс</span><span class="ton-badge">TON</span></div><div class="ct-value"><span id="tonBalance">0</span> TON</div><div class="ct-actions"><button class="primary" id="tonDepositBtn">Пополнить</button><button id="tonWithdrawBtn">Вывод</button></div>';const invite=profile.querySelector('.invite');invite?.insertAdjacentElement('beforebegin',card);$('#tonDepositBtn').onclick=openDeposit;$('#tonWithdrawBtn').onclick=()=>toast('Вывод TON: укажи TON-адрес через поддержку, чтобы оформить выплату.')}
+  function setMode(next){mode=next;document.querySelectorAll('#currencySwitch button').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));const top=$('#bankTop');if(top){const old=top.previousElementSibling;if(old)old.replaceWith(Object.assign(document.createElement('span'),{className:'gold',textContent:mode==='ton'?'💎':'⭐'}))}const cta=$('#joinBtn');if(cta)cta.textContent=mode==='ton'?'💎 Играть за TON':'⭐ Сделать ставку';if(mode==='ton'){loadTonBattle();startTonPolling()}else stopTonPolling()}
   function stopTonPolling(){if(poll){clearInterval(poll);poll=null}}
-  function startTonPolling(){stopTonPolling();poll=setInterval(loadTonBattle,2000)}
-
-  function renderTonBattle(d){
-    if(mode!=='ton') return;
-    const bank=$('#bankTop'); if(bank) bank.textContent=(Number(d.bank)||0).toFixed(2).replace(/\.00$/,'');
-    const id=$('#roundId'); if(id) id.textContent=d.battle_id||'—';
-    const count=$('#arenaCount');
-    if(count){const end=Number(d.countdown_end||0); const left=end?Math.max(0,end-Math.floor(Date.now()/1000)):0; count.textContent=left?left:'GO';}
-    const box=$('#players'); if(!box)return;
-    if(!d.players?.length){box.innerHTML='<div class="player"><div class="pava">💎</div><div><div class="pname">Ждём игроков</div><div class="chance">Первый TON-игрок запускает раунд</div></div><div class="bet">💎 0</div></div>';return;}
-    const icons=['🧑🏻‍🎤','👻','🐸','🦊','🐼','🦄'];
-    box.innerHTML=d.players.map((p,i)=>`<div class="player"><div class="pava">${icons[i%icons.length]}</div><div><div class="pname">Игрок ${String(p.user_id).slice(-4)}</div><div class="chance">Шанс ${p.chance}%</div></div><div class="bet">💎 ${Number(p.bet).toFixed(2)}</div></div>`).join('');
-  }
+  function startTonPolling(){stopTonPolling();poll=setInterval(loadTonBattle,1500)}
+  function renderTonBattle(d){if(mode!=='ton')return;const bank=$('#bankTop');if(bank)bank.textContent=(Number(d.bank)||0).toFixed(2).replace(/\.00$/,'');const id=$('#roundId');if(id)id.textContent=d.battle_id||'—';const count=$('#arenaCount');if(count){const end=Number(d.countdown_end||0),left=end?Math.max(0,end-Math.floor(Date.now()/1000)):0;count.textContent=left?left:'GO'}const box=$('#players');if(!box)return;if(!d.players?.length){box.innerHTML='<div class="player"><div class="pava">💎</div><div><div class="pname">Ждём игроков</div><div class="chance">Первый TON-игрок запускает раунд</div></div><div class="bet">💎 0</div></div>';return}const icons=['🧑🏻‍🎤','👻','🐸','🦊','🐼','🦄'];box.innerHTML=d.players.map((p,i)=>`<div class="player"><div class="pava">${icons[i%icons.length]}</div><div><div class="pname">Игрок ${String(p.user_id).slice(-4)}</div><div class="chance">Шанс ${p.chance}%</div></div><div class="bet">💎 ${Number(p.bet).toFixed(2)}</div></div>`).join('')}
   async function loadTonBattle(){try{renderTonBattle(await api('/api/ton-battle'))}catch(e){if(mode==='ton')toast(e.message)}}
 
-  function openDeposit(){
-    let modal=$('#tonDepositModal');
-    if(!modal){
-      modal=document.createElement('div'); modal.id='tonDepositModal'; modal.className='sheet open ton-modal';
-      modal.innerHTML='<div class="sheet-inner"><h3>Пополнить 💎 TON</h3><p class="ton-muted">Отправь TON на адрес GIFTSMMS. После оплаты вставь hash — система проверит транзакцию автоматически.</p><div class="ton-bet-grid" id="tonDepGrid"><button data-v="0.1" class="active">0.1 TON</button><button data-v="0.25">0.25 TON</button><button data-v="0.5">0.5 TON</button><button data-v="1">1 TON</button></div><button class="bottom-confirm" id="createTonDeposit">Создать платёж</button><div id="tonPayInfo" style="display:none"><div class="ton-address" id="tonDestination">—</div><input class="ton-input" id="tonTxHash" placeholder="Hash TON-транзакции"><button class="bottom-confirm" id="confirmTon">Проверить оплату</button></div><button class="sheet-close" id="closeTonDeposit">Закрыть</button></div>';
-      document.body.appendChild(modal);
-      modal.querySelectorAll('#tonDepGrid button').forEach(b=>b.onclick=()=>{tonDeposit=Number(b.dataset.v);modal.querySelectorAll('#tonDepGrid button').forEach(x=>x.classList.remove('active'));b.classList.add('active')});
-      $('#closeTonDeposit').onclick=()=>modal.classList.remove('open');
-      $('#createTonDeposit').onclick=async()=>{try{const d=await api('/api/ton/deposit',{method:'POST',body:JSON.stringify({amount:tonDeposit})});if(!d.ok)throw new Error(d.message);$('#tonDestination').textContent=`Адрес: ${d.destination}\nКомментарий: ${d.comment}`;$('#tonPayInfo').style.display='block';$('#createTonDeposit').textContent='Платёж создан';window.open(d.ton_uri,'_blank');toast('Открыл TON Wallet. После оплаты вставь hash.')}catch(e){toast(e.message)}};
-      $('#confirmTon').onclick=async()=>{try{const d=await api('/api/ton/confirm',{method:'POST',body:JSON.stringify({tx_hash:$('#tonTxHash').value.trim()})});if(!d.ok)throw new Error(d.message);toast(`Зачислено ${d.credited_ton} TON 💎`);$('#tonTxHash').value='';await loadMe();modal.classList.remove('open')}catch(e){toast(e.message)}};
-    }
-    modal.classList.add('open');
-  }
+  function openDeposit(){let modal=$('#tonDepositModal');if(!modal){modal=document.createElement('div');modal.id='tonDepositModal';modal.className='sheet open ton-modal';modal.innerHTML='<div class="sheet-inner"><h3>Пополнить 💎 TON</h3><p class="ton-muted">Отправь TON на адрес GIFTSMMS. После оплаты вставь hash — система проверит транзакцию автоматически.</p><div class="ton-bet-grid" id="tonDepGrid"><button data-v="0.1" class="active">0.1 TON</button><button data-v="0.25">0.25 TON</button><button data-v="0.5">0.5 TON</button><button data-v="1">1 TON</button></div><button class="bottom-confirm" id="createTonDeposit">Создать платёж</button><div id="tonPayInfo" style="display:none"><div class="ton-address" id="tonDestination">—</div><input class="ton-input" id="tonTxHash" placeholder="Hash TON-транзакции"><button class="bottom-confirm" id="confirmTon">Проверить оплату</button></div><button class="sheet-close" id="closeTonDeposit">Закрыть</button></div>';document.body.appendChild(modal);modal.querySelectorAll('#tonDepGrid button').forEach(b=>b.onclick=()=>{tonDeposit=Number(b.dataset.v);modal.querySelectorAll('#tonDepGrid button').forEach(x=>x.classList.remove('active'));b.classList.add('active')});$('#closeTonDeposit').onclick=()=>modal.classList.remove('open');$('#createTonDeposit').onclick=async()=>{try{const d=await api('/api/ton/deposit',{method:'POST',body:JSON.stringify({amount:tonDeposit})});if(!d.ok)throw new Error(d.message);$('#tonDestination').textContent=`Адрес: ${d.destination}\nКомментарий: ${d.comment}`;$('#tonPayInfo').style.display='block';$('#createTonDeposit').textContent='Платёж создан';if(d.ton_uri)window.location.href=d.ton_uri;toast('Открыл TON Wallet. После оплаты вставь hash.')}catch(e){toast(e.message)}};$('#confirmTon').onclick=async()=>{try{const d=await api('/api/ton/confirm',{method:'POST',body:JSON.stringify({tx_hash:$('#tonTxHash').value.trim()})});if(!d.ok)throw new Error(d.message);toast(`Зачислено ${d.credited_ton} TON 💎`);$('#tonTxHash').value='';await loadMe();modal.classList.remove('open')}catch(e){toast(e.message)}}}modal.classList.add('open')}
 
-  function patchLoadMe(){
-    const original=window.loadMe; if(!original || original.__tonPatched) return;
-    const wrapped=async()=>{await original();try{const d=await api('/api/me');const b=Number(d.profile?.ton_balance||0);const el=$('#tonBalance');if(el)el.textContent=b.toFixed(4).replace(/0+$/,'').replace(/\.$/,'')||'0';const mini=$('#miniBalance');if(mini && mode==='ton')mini.textContent=b.toFixed(2)+' TON';}catch(_){}};
-    wrapped.__tonPatched=true; window.loadMe=wrapped;
-  }
+  function patchLoadMe(){const original=window.loadMe;if(!original||original.__tonPatched)return;const wrapped=async()=>{await original();try{const d=await api('/api/me');const b=Number(d.profile?.ton_balance||0);const el=$('#tonBalance');if(el)el.textContent=b.toFixed(4).replace(/0+$/,'').replace(/\.$/,'')||'0';const mini=$('#miniBalance');if(mini&&mode==='ton')mini.textContent=b.toFixed(2)+' TON'}catch(_){}};wrapped.__tonPatched=true;window.loadMe=wrapped}
+  function patchJoin(){const btn=$('#joinBtn');if(!btn||btn.__tonPatched)return;btn.__tonPatched=true;btn.onclick=()=>mode==='ton'?openTonBet():$('#betSheet')?.classList.add('open')}
+  function openTonBet(){let modal=$('#tonBetModal');if(!modal){modal=document.createElement('div');modal.id='tonBetModal';modal.className='sheet open ton-modal';modal.innerHTML='<div class="sheet-inner"><h3>Играть за 💎 TON</h3><p class="ton-muted">Ставка списывается с TON-баланса. Победитель получает банк раунда.</p><div class="ton-bet-grid" id="tonBetGrid"><button data-v="0.1" class="active">0.1 TON</button><button data-v="0.25">0.25 TON</button><button data-v="0.5">0.5 TON</button><button data-v="1">1 TON</button></div><button class="bottom-confirm" id="confirmTonBet">Войти в раунд</button><button class="sheet-close" id="closeTonBet">Отмена</button></div>';document.body.appendChild(modal);modal.querySelectorAll('#tonBetGrid button').forEach(b=>b.onclick=()=>{tonBet=Number(b.dataset.v);modal.querySelectorAll('#tonBetGrid button').forEach(x=>x.classList.remove('active'));b.classList.add('active')});$('#closeTonBet').onclick=()=>modal.classList.remove('open');$('#confirmTonBet').onclick=async()=>{try{const d=await api('/api/ton-battle/join',{method:'POST',body:JSON.stringify({amount:tonBet})});if(!d.ok)throw new Error(d.message);modal.classList.remove('open');renderTonBattle(d.battle);toast('Ставка принята 💎');await loadMe()}catch(e){toast(e.message)}}}modal.classList.add('open')}
 
-  function patchJoin(){
-    const btn=$('#joinBtn'); if(!btn || btn.__tonPatched)return;
-    btn.__tonPatched=true;
-    btn.onclick=()=>{if(mode==='ton')openTonBet();else $('#betSheet')?.classList.add('open')};
-  }
-  function openTonBet(){
-    let modal=$('#tonBetModal');
-    if(!modal){
-      modal=document.createElement('div');modal.id='tonBetModal';modal.className='sheet open ton-modal';
-      modal.innerHTML='<div class="sheet-inner"><h3>Играть за 💎 TON</h3><p class="ton-muted">Ставка списывается с TON-баланса. Победитель получает банк раунда.</p><div class="ton-bet-grid" id="tonBetGrid"><button data-v="0.1" class="active">0.1 TON</button><button data-v="0.25">0.25 TON</button><button data-v="0.5">0.5 TON</button><button data-v="1">1 TON</button></div><button class="bottom-confirm" id="confirmTonBet">Войти в раунд</button><button class="sheet-close" id="closeTonBet">Отмена</button></div>';
-      document.body.appendChild(modal);
-      modal.querySelectorAll('#tonBetGrid button').forEach(b=>b.onclick=()=>{tonBet=Number(b.dataset.v);modal.querySelectorAll('#tonBetGrid button').forEach(x=>x.classList.remove('active'));b.classList.add('active')});
-      $('#closeTonBet').onclick=()=>modal.classList.remove('open');
-      $('#confirmTonBet').onclick=async()=>{try{const d=await api('/api/ton-battle/join',{method:'POST',body:JSON.stringify({amount:tonBet})});if(!d.ok)throw new Error(d.message);modal.classList.remove('open');renderTonBattle(d.battle);toast('Ставка принята 💎');await loadMe()}catch(e){toast(e.message)}};
-    }
-    modal.classList.add('open');
-  }
-
-  function boot(){style();addSwitch();addTonProfile();patchLoadMe();patchJoin();setTimeout(()=>{patchLoadMe();patchJoin();},300);}
+  function boot(){style();addSwitch();addTonProfile();patchLoadMe();patchJoin();setTimeout(()=>{patchLoadMe();patchJoin()},300);}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
 })();
