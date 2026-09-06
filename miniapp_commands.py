@@ -1,3 +1,5 @@
+import os
+
 from aiogram import Router, types
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
@@ -8,7 +10,7 @@ router = Router()
 
 
 def app_url(message: types.Message) -> str:
-    return (message.bot._miniapp_url if hasattr(message.bot, '_miniapp_url') else '').strip()
+    return os.getenv("WEBAPP_URL", "").strip()
 
 
 @router.message(Command("open"))
@@ -17,12 +19,21 @@ async def open_cmd(message: types.Message):
     if not url:
         await message.answer(f"{BOT_NAME}: Mini App URL пока не настроен в боте.")
         return
-    await message.answer("🎁 Открыть GIFTSMMS", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Открыть Mini App", web_app=WebAppInfo(url=url))]]))
+    await message.answer(
+        "🎁 Открыть GIFTSMMS",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="Открыть Mini App", web_app=WebAppInfo(url=url))]
+            ]
+        ),
+    )
 
 
 @router.message(Command("help"))
 async def help_cmd(message: types.Message):
-    await message.answer("GIFTSMMS\n\n/open — Mini App\n/profile — профиль\n/tasks — задания\n\nПоддержка: @GIFTSMMSHelp")
+    await message.answer(
+        "GIFTSMMS\n\n/open — Mini App\n/profile — профиль\n/tasks — задания\n\nПоддержка: @GIFTSMMSHelp"
+    )
 
 
 @router.message(Command("profile"))
