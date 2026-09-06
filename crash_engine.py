@@ -7,7 +7,6 @@ import aiosqlite
 from aiohttp import web
 
 from config import MIN_DEPOSIT_STARS
-from db import update_balance
 
 
 async def init_crash_db(db_name: str):
@@ -43,7 +42,6 @@ async def init_crash_db(db_name: str):
 def _crash_point(seed: str) -> float:
     digest = hashlib.sha256(seed.encode()).digest()
     n = int.from_bytes(digest[:8], "big")
-    # House-independent deterministic point in [1.01, 50.00].
     u = (n + 1) / float(2**64)
     point = 1.0 / max(0.02, 1.0 - u)
     return round(max(1.01, min(50.0, point)), 2)
@@ -58,22 +56,26 @@ async def _ensure_round(db_name: str):
     now = time.time()
     async with aiosqlite.connect(db_name) as db:
         async with db.execute(
-            "SELECT round_id, seed, seed_hash, crash_at, started_at, status FROM crash_rounds ORDER BY round_id DESC LIMIT 1"
+            "SELECT round_id, seed, seed_hash, crash_at, started_at, crashed_at, status FROM crash_rounds ORDER BY round_id DESC LIMIT 1"
         ) as cur:
             row = await cur.fetchone()
-        if row and row[5] == "running":
-            current = _multiplier(row[4], now)
-            if current >= row[3]:
-                await db.execute(
-                    "UPDATE crash_rounds SET status='crashed', crashed_at=? WHERE round_id=? AND status='running'",
-                    (now, row[0]),
-                )
-                await db.execute(
-                    "UPDATE crash_bets SET status='lost' WHERE round_id=? AND status='active'",
-                    (row[0],),
-                )
-                await db.commit()
-            else:
+        if row:
+            round_id, seed, seed_hash, crash_at, started_at, crashed_at, status = row
+            if status == "running":
+                current = _multiplier(started_at, now)
+                if current >= crash_at:
+                    await db.execute(
+                        "UPDATE crash_rounds SET status='crashed', crashed_at=? WHERE round_id=? AND status='running'",
+                        (now, round_id),
+                    )
+                    await db.execute(
+                        "UPDATE crash_bets SET status='lost' WHERE round_id=? AND status='active'",
+                        (round_id,),
+                    )
+                    await db.commit()
+                    return (round_id, seed, seed_hash, crash_at, started_at, now, "crashed")
+                return row
+            if status == "crashed" and crashed_at and now - crashed_at < 2.5:
                 return row
         seed = secrets.token_hex(32)
         seed_hash = hashlib.sha256(seed.encode()).hexdigest()
@@ -84,14 +86,16 @@ async def _ensure_round(db_name: str):
         )
         round_id = cur.lastrowid
         await db.commit()
-        return (round_id, seed, seed_hash, crash_at, now, "running")
+        return (round_id, seed, seed_hash, crash_at, now, None, "running")
 
 
 async def crash_state(db_name: str, user_id: int):
     row = await _ensure_round(db_name)
-    round_id, seed, seed_hash, crash_at, started_at, status = row
+    round_id, seed, seed_hash, crash_at, started_at, crashed_at, status = row
     now = time.time()
     multiplier = min(crash_at, _multiplier(started_at, now))
+    if status == "crashed":
+        multiplier = crash_at
     async with aiosqlite.connect(db_name) as db:
         async with db.execute(
             "SELECT bet_id, stake, payout, multiplier, status FROM crash_bets WHERE round_id=? AND user_id=?",
@@ -104,6 +108,7 @@ async def crash_state(db_name: str, user_id: int):
         "multiplier": multiplier,
         "crash_at": crash_at if status == "crashed" else None,
         "seed_hash": seed_hash,
+        "server_seed": seed if status == "crashed" else None,
         "bet": {
             "bet_id": bet[0],
             "stake": bet[1],
@@ -118,19 +123,19 @@ async def place_crash_bet(db_name: str, user_id: int, stake: int):
     if stake < MIN_DEPOSIT_STARS:
         return False, f"Минимальная ставка — {MIN_DEPOSIT_STARS} ⭐."
     row = await _ensure_round(db_name)
-    round_id, _, _, _, _, status = row
+    round_id, _, _, _, _, _, status = row
     if status != "running":
         return False, "Раунд уже завершён."
     async with aiosqlite.connect(db_name) as db:
-        async with db.execute(
-            "SELECT 1 FROM crash_bets WHERE round_id=? AND user_id=?",
-            (round_id, user_id),
-        ) as cur:
+        await db.execute("BEGIN IMMEDIATE")
+        async with db.execute("SELECT 1 FROM crash_bets WHERE round_id=? AND user_id=?", (round_id, user_id)) as cur:
             if await cur.fetchone():
+                await db.rollback()
                 return False, "У вас уже есть ставка в этом раунде."
         async with db.execute("SELECT balance FROM users WHERE user_id=?", (user_id,)) as cur:
             row_user = await cur.fetchone()
-        if not row_user or row_user[0] < stake:
+        if not row_user or float(row_user[0] or 0) < stake:
+            await db.rollback()
             return False, "Недостаточно ⭐."
         await db.execute("UPDATE users SET balance=balance-? WHERE user_id=?", (stake, user_id))
         await db.execute(
@@ -143,18 +148,20 @@ async def place_crash_bet(db_name: str, user_id: int, stake: int):
 
 async def cashout_crash_bet(db_name: str, user_id: int):
     row = await _ensure_round(db_name)
-    round_id, _, _, crash_at, started_at, status = row
+    round_id, _, _, crash_at, started_at, _, status = row
     now = time.time()
     multiplier = min(crash_at, _multiplier(started_at, now))
     if status != "running" or multiplier >= crash_at:
         return False, "Раунд уже завершён.", 0
     async with aiosqlite.connect(db_name) as db:
+        await db.execute("BEGIN IMMEDIATE")
         async with db.execute(
             "SELECT bet_id, stake, status FROM crash_bets WHERE round_id=? AND user_id=?",
             (round_id, user_id),
         ) as cur:
             bet = await cur.fetchone()
         if not bet or bet[2] != "active":
+            await db.rollback()
             return False, "Активная ставка не найдена.", 0
         payout = max(1, int(bet[1] * multiplier))
         changed = await db.execute(
