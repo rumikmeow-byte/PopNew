@@ -256,6 +256,32 @@ async def get_all_channels():
     return [row[0] for row in rows if row[0]]
 
 
+async def add_channel(username: str):
+    username = username.strip().lstrip("@").strip()
+    if not username:
+        return False
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute(
+            "INSERT OR IGNORE INTO channels (username) VALUES (?)",
+            (username,),
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+
+
+async def remove_channel(username: str):
+    username = username.strip().lstrip("@").strip()
+    if not username:
+        return False
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute(
+            "DELETE FROM channels WHERE username = ?",
+            (username,),
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+
+
 # Compatibility for legacy handlers. Real Stars/TON battle wagering is disabled.
 async def create_battle(*args, **kwargs):
     return None
