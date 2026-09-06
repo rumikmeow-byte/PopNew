@@ -17,7 +17,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
 from config import BOT_TOKEN, BOT_WALLET_ADDRESS, DB_NAME, MIN_DEPOSIT_TON, TON_API_KEY
-from db import get_referral_stats, get_user, increment_share_count, update_ton_balance
+from db import get_referral_stats, get_user, increment_share_count, update_ton_balance, init_db
 from user_handlers import handlers_router
 from miniapp_commands import router as miniapp_commands_router
 from admin_handlers import admin_router
