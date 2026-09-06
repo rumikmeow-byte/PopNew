@@ -31,11 +31,12 @@ from ton_battle import TonBattle
 from miniapp_features import MiniAppFeatures
 
 BASE_DIR = Path(__file__).resolve().parent
-APP_NAME = "GiftsEZZ"
+APP_NAME = "ECLIPSE"
 REQUIRED_CASE_CHANNEL = "eclipsedlf"
-NEWS_CHANNEL = "@Eclipsedlf"
-SUPPORT_USERNAME = "@Eclipsed_consult"
-FREE_CASE_DROPS = ((1.0, 80), (1.5, 18), (5.0, 2))
+NEWS_CHANNEL = "@eclipsedlf"
+SUPPORT_USERNAME = os.getenv("SUPPORT_USERNAME", "@Eclipsed_consult")
+# Case rewards are internal in-app Stars credits; they are not a Telegram Stars cash-out mechanism.
+FREE_CASE_DROPS = ((3.0, 60), (5.0, 30), (9.0, 10))
 virtual_battle = VirtualBattle(DB_NAME)
 ton_battle = TonBattle(DB_NAME)
 
@@ -61,24 +62,24 @@ class SubscriptionGateMiddleware(BaseMiddleware):
 
         if isinstance(event, types.Message) and event.text and event.text.startswith("/start"):
             await event.answer(
-                "🔒 Чтобы пользоваться GiftsEZZ, сначала подпишитесь на @eclipsedlf.",
+                "Чтобы открыть ECLIPSE, подпишитесь на @eclipsedlf.",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="📢 Подписаться", url="https://t.me/eclipsedlf")],
-                    [InlineKeyboardButton(text="✅ Я подписался", callback_data="check_sub_access")],
+                    [InlineKeyboardButton(text="Подписаться", url="https://t.me/eclipsedlf")],
+                    [InlineKeyboardButton(text="Проверить подписку", callback_data="check_sub_access")],
                 ]),
             )
             return
         if isinstance(event, types.CallbackQuery) and event.data == "check_sub_access":
             if await subscribed(bot, user.id):
-                await event.message.edit_text("✅ Подписка подтверждена. Нажмите /start ещё раз.")
+                await event.message.edit_text("Подписка подтверждена. Нажмите /start ещё раз.")
                 await event.answer("Готово")
             else:
-                await event.answer("❌ Подписка пока не найдена.", show_alert=True)
+                await event.answer("Подписка пока не найдена.", show_alert=True)
             return
         if isinstance(event, types.CallbackQuery):
-            await event.answer("🔒 Сначала подпишитесь на @eclipsedlf.", show_alert=True)
+            await event.answer("Сначала подпишитесь на @eclipsedlf.", show_alert=True)
         else:
-            await event.answer("🔒 Сначала подпишитесь на @eclipsedlf.")
+            await event.answer("Сначала подпишитесь на @eclipsedlf.")
 
 
 async def require_webapp_subscription(request, uid: int):
@@ -118,7 +119,7 @@ def validate_webapp_user(request):
 async def handle_index(request):
     html = (BASE_DIR / "webapp" / "index.html").read_text(encoding="utf-8")
     injections = []
-    for src in ("/ton-payments.js", "/battle-virtual.js", "/cleanup.js", "/ton-game.js", "/safe-ui.js"):
+    for src in ("/ton-payments.js", "/battle-virtual.js", "/cleanup.js", "/ton-game.js", "/safe-ui.js", "/eclipse-ui.js"):
         if src not in html:
             injections.append(f'<script src="{src}"></script>')
     if injections:
@@ -225,7 +226,7 @@ async def api_free_case(request):
         reward = choose_free_case_drop()
         await db.execute("UPDATE users SET balance=balance+?, free_case_time=? WHERE user_id=?", (reward, now, uid))
         await db.commit()
-    return web.json_response({"ok": True, "reward": reward, "probabilities": {"1": 80, "1.5": 18, "5": 2}, "profile": await get_user(uid)})
+    return web.json_response({"ok": True, "reward": reward, "probabilities": {"3": 60, "5": 30, "9": 10}, "profile": await get_user(uid)})
 
 
 async def api_referrals(request):
@@ -233,7 +234,7 @@ async def api_referrals(request):
     await require_webapp_subscription(request, uid)
     count, earned = await get_referral_stats(uid)
     bot = await request.app["bot"].get_me()
-    return web.json_response({"count": count, "earned": earned, "link": f"https://t.me/{bot.username}?startapp=ref_{uid}"})
+    return web.json_response({"count": count, "earned": earned, "reward": 1, "link": f"https://t.me/{bot.username}?startapp=ref_{uid}"})
 
 
 async def api_deposit(request):
@@ -246,7 +247,7 @@ async def api_ton_deposit(request):
     uid, _ = validate_webapp_user(request)
     await require_webapp_subscription(request, uid)
     if not BOT_WALLET_ADDRESS:
-        return web.json_response({"ok": False, "message": "TON-кошелёк GiftsEZZ пока не настроен."})
+        return web.json_response({"ok": False, "message": "TON-кошелёк ECLIPSE пока не настроен."})
     try:
         amount = float((await request.json()).get("amount", 0))
     except Exception:
@@ -254,7 +255,7 @@ async def api_ton_deposit(request):
     if amount < MIN_DEPOSIT_TON:
         return web.json_response({"ok": False, "message": f"Минимум для TON: {MIN_DEPOSIT_TON:g} TON."})
     nonce = secrets.token_hex(6)
-    comment = f"GIFTSEZZ:{uid}:{nonce}"
+    comment = f"ECLIPSE:{uid}:{nonce}"
     intent_hash = f"intent:{uid}:{nonce}"
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute("INSERT INTO ton_deposits(user_id,tx_hash,amount_ton,destination,status,created_at) VALUES(?,?,?,?,?,?)", (uid, intent_hash, amount, BOT_WALLET_ADDRESS, "pending", int(time.time())))
@@ -298,7 +299,7 @@ async def api_ton_confirm(request):
     text = str(msg.get("message") or decoded.get("comment") or decoded.get("text") or "")
     value = int(msg.get("value") or 0)
     expected = float(intent[1])
-    if ((destination and destination != BOT_WALLET_ADDRESS) or value < int(expected * 1e9) or not text.startswith(f"GIFTSEZZ:{uid}:")):
+    if ((destination and destination != BOT_WALLET_ADDRESS) or value < int(expected * 1e9) or not text.startswith(f"ECLIPSE:{uid}:")):
         return web.json_response({"ok": False, "message": "Сумма, адрес или комментарий не совпадают с заявкой."})
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute("UPDATE ton_deposits SET tx_hash=?,status='confirmed',confirmed_at=? WHERE deposit_id=? AND status='pending'", (tx_hash, int(time.time()), intent[0]))
@@ -347,11 +348,7 @@ async def api_ws(request):
     await ws.prepare(request)
     try:
         while not ws.closed:
-            payload = {
-                "type": "state",
-                "server_time": time.time(),
-                "arena": await virtual_battle.snapshot(uid),
-            }
+            payload = {"type": "state", "server_time": time.time(), "arena": await virtual_battle.snapshot(uid)}
             await ws.send_json(payload)
             try:
                 msg = await asyncio.wait_for(ws.receive(), timeout=1.0)
@@ -395,7 +392,7 @@ async def main():
     app["bot"] = bot
     app.router.add_get("/", handle_index)
     app.router.add_get("/health", health)
-    for asset in ("battle-virtual.js", "ton-payments.js", "ton-game.js", "animations.css", "giftsmms-logo.svg", "cleanup.js", "safe-ui.js"):
+    for asset in ("battle-virtual.js", "ton-payments.js", "ton-game.js", "animations.css", "giftsmms-logo.svg", "cleanup.js", "safe-ui.js", "eclipse-ui.js"):
         app.router.add_get(f"/{asset}", file_handler(asset))
     async def ton_manifest(request):
         base = str(request.url.with_path("/").with_query(""))
