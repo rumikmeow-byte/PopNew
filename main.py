@@ -39,6 +39,8 @@ from miniapp_features import MiniAppFeatures
 BASE_DIR = Path(__file__).resolve().parent
 APP_NAME = "GIFTSMMS"
 REQUIRED_CASE_CHANNEL = "eclipsedlf"
+NEWS_CHANNEL = "@Eclipsedlf"
+SUPPORT_USERNAME = "@Eclipsed_consult"
 virtual_battle = VirtualBattle(DB_NAME)
 
 
@@ -328,7 +330,7 @@ async def main():
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-    logging.info("GIFTSMMS server started on %s", port)
+    logging.info("GIFTSMMS server started on %s | news=%s | support=%s", port, NEWS_CHANNEL, SUPPORT_USERNAME)
 
     try:
         await bot.delete_webhook(drop_pending_updates=True)
