@@ -7,6 +7,8 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from config import BOT_NAME
 
 router = Router()
+SUPPORT_USERNAME = "@Eclipsed_consult"
+NEWS_CHANNEL = "@Eclipsedlf"
 
 
 def app_url(message: types.Message) -> str:
@@ -32,7 +34,8 @@ async def open_cmd(message: types.Message):
 @router.message(Command("help"))
 async def help_cmd(message: types.Message):
     await message.answer(
-        "GIFTSMMS\n\n/open — Mini App\n/profile — профиль\n/tasks — задания\n\nПоддержка: @GIFTSMMSHelp"
+        f"GIFTSMMS\n\n/open — Mini App\n/profile — профиль\n/tasks — задания\n\n"
+        f"📢 Новости: {NEWS_CHANNEL}\n🛟 Поддержка: {SUPPORT_USERNAME}"
     )
 
 
