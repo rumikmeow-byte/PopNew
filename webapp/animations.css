@@ -1,28 +1,29 @@
 :root{--anim-ease:cubic-bezier(.22,1,.36,1)}
 *{scroll-behavior:smooth}
-html,body{overscroll-behavior-y:none}
+html,body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent}
 body{animation:pageIn .55s var(--anim-ease) both}
-.card,.nav,.top,.bottom,.modal,.toast,.battle,.case,.crash{transition:transform .32s var(--anim-ease),opacity .32s ease,box-shadow .32s ease,filter .32s ease}
-.card:hover{transform:translateY(-3px);box-shadow:0 14px 40px #0008,0 0 24px #8b5cf622}
-button{transition:transform .18s var(--anim-ease),filter .18s ease,box-shadow .18s ease,opacity .18s ease}
-button:active{transform:scale(.96)}
+.card,.nav,.top,.bottom,.modal,.toast,.battle,.case,.crash{transition:transform .32s var(--anim-ease),opacity .32s ease,box-shadow .32s ease,filter .32s ease;transform:translateZ(0);backface-visibility:hidden}
+button{transition:transform .18s var(--anim-ease),filter .18s ease,box-shadow .18s ease,opacity .18s ease;transform:translateZ(0);backface-visibility:hidden}
+button:active{transform:translate3d(0,0,0) scale(.96)}
 button:hover{filter:brightness(1.08)}
 .nav button{transition:transform .22s var(--anim-ease),opacity .2s ease;padding:6px 9px;font-size:12px;line-height:1.15;min-width:48px}
 .nav{padding:6px 7px;border-radius:18px}
-.nav button:active{transform:translateY(1px) scale(.97)}
+.nav button:active{transform:translate3d(0,1px,0) scale(.97)}
 section{animation:sectionIn .48s var(--anim-ease) both}
 section:nth-of-type(2){animation-delay:.03s}section:nth-of-type(3){animation-delay:.06s}section:nth-of-type(4){animation-delay:.09s}
-.rocket{animation:rocketFloat 2.7s ease-in-out infinite;filter:drop-shadow(0 0 18px #8b5cf688)}
-.stars{animation:starsDrift 8s linear infinite}
-.mult{transition:transform .22s var(--anim-ease),filter .22s ease}
+.rocket{animation:rocketFloat 2.7s ease-in-out infinite;filter:drop-shadow(0 0 18px #8b5cf688);will-change:transform;transform:translate3d(-50%,-50%,0)}
+.stars{animation:starsDrift 8s linear infinite;will-change:transform;transform:translate3d(0,0,0)}
+.mult{transition:transform .22s var(--anim-ease),filter .22s ease;will-change:transform,filter;transform:translateZ(0)}
 .mult.live{animation:multPulse 1.25s ease-in-out infinite}
-.create{animation:softGlow 2.8s ease-in-out infinite}
+.create{animation:softGlow 2.8s ease-in-out infinite;will-change:box-shadow}
 .g-bet{min-height:34px!important;padding:7px 8px!important;border-radius:11px!important;font-size:12px!important;font-weight:800}
-@keyframes pageIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-@keyframes sectionIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
-@keyframes rocketFloat{0%,100%{transform:translate(-50%,-50%) rotate(-2deg)}50%{transform:translate(-50%,-54%) rotate(2deg)}}
-@keyframes starsDrift{from{transform:translateX(0)}to{transform:translateX(-80px)}}
-@keyframes multPulse{0%,100%{transform:scale(1);filter:drop-shadow(0 0 0 transparent)}50%{transform:scale(1.035);filter:drop-shadow(0 0 16px #35d9ff55)}}
+/* Keep high-frequency game animation on compositor-friendly properties. */
+.crash-stage,.arena-wheel,.rocket,.mult,.case-opening,.case-opening *{will-change:transform;backface-visibility:hidden;transform:translateZ(0)}
+@keyframes pageIn{from{opacity:0;transform:translate3d(0,8px,0)}to{opacity:1;transform:translate3d(0,0,0)}}
+@keyframes sectionIn{from{opacity:0;transform:translate3d(0,14px,0)}to{opacity:1;transform:translate3d(0,0,0)}}
+@keyframes rocketFloat{0%,100%{transform:translate3d(-50%,-50%,0) rotate(-2deg)}50%{transform:translate3d(-50%,-54%,0) rotate(2deg)}}
+@keyframes starsDrift{from{transform:translate3d(0,0,0)}to{transform:translate3d(-80px,0,0)}}
+@keyframes multPulse{0%,100%{transform:translateZ(0) scale(1);filter:drop-shadow(0 0 0 transparent)}50%{transform:translateZ(0) scale(1.035);filter:drop-shadow(0 0 16px #35d9ff55)}}
 @keyframes softGlow{0%,100%{box-shadow:0 0 0 transparent}50%{box-shadow:0 0 28px #8b5cf622}}
 @media(max-width:560px){.nav{width:calc(100% - 30px)}.nav button{padding:5px 7px;font-size:11px;min-width:44px}.g-bet{min-height:32px!important;padding:6px!important;font-size:11px!important}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
