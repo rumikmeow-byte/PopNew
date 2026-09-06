@@ -16,25 +16,8 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
-from config import (
-    BOT_TOKEN,
-    BOT_WALLET_ADDRESS,
-    DB_NAME,
-    MAX_DEPOSIT_STARS,
-    MIN_DEPOSIT_STARS,
-    MIN_DEPOSIT_TON,
-    TON_API_KEY,
-)
-from db import (
-    init_db,
-    get_user,
-    get_referral_stats,
-    update_balance,
-    update_ton_balance,
-    set_free_case_time,
-    reset_share_count,
-    increment_share_count,
-)
+from config import BOT_TOKEN, BOT_WALLET_ADDRESS, DB_NAME, MAX_DEPOSIT_STARS, MIN_DEPOSIT_STARS, MIN_DEPOSIT_TON, TON_API_KEY
+from db import init_db, get_user, get_referral_stats, update_balance, update_ton_balance, set_free_case_time, reset_share_count, increment_share_count
 from user_handlers import handlers_router
 from admin_handlers import admin_router
 from payments import payments_router, init_payment_db, register_payment_routes, api_stars_invoice
@@ -78,11 +61,16 @@ def validate_webapp_user(request: web.Request):
 
 
 async def handle_index(request: web.Request):
-    index_path = BASE_DIR / "webapp" / "index.html"
-    html = index_path.read_text(encoding="utf-8")
+    html = (BASE_DIR / "webapp" / "index.html").read_text(encoding="utf-8")
     marker = "</body>"
-    if "/battle-virtual.js" not in html and marker in html:
-        html = html.replace(marker, '<script src="/battle-virtual.js"></script>\n</body>')
+    if marker in html:
+        injections = []
+        if "/ton-payments.js" not in html:
+            injections.append('<script src="/ton-payments.js"></script>')
+        if "/battle-virtual.js" not in html:
+            injections.append('<script src="/battle-virtual.js"></script>')
+        if injections:
+            html = html.replace(marker, "\n".join(injections) + "\n</body>")
     return web.Response(text=html, content_type="text/html")
 
 
@@ -90,12 +78,12 @@ async def handle_battle_js(request: web.Request):
     return web.FileResponse(BASE_DIR / "webapp" / "battle-virtual.js")
 
 
+async def handle_ton_js(request: web.Request):
+    return web.FileResponse(BASE_DIR / "webapp" / "ton-payments.js")
+
+
 async def handle_ton_manifest(request: web.Request):
-    return web.json_response({
-        "url": str(request.url.with_path("/").with_query("")),
-        "name": APP_NAME,
-        "iconUrl": str(request.url.with_path("/icon-180.png").with_query("")),
-    })
+    return web.json_response({"url": str(request.url.with_path("/").with_query("")), "name": APP_NAME, "iconUrl": str(request.url.with_path("/icon-180.png").with_query(""))})
 
 
 async def health(request: web.Request):
@@ -272,6 +260,7 @@ async def main():
     app["bot"] = bot
     app.router.add_get("/", handle_index)
     app.router.add_get("/battle-virtual.js", handle_battle_js)
+    app.router.add_get("/ton-payments.js", handle_ton_js)
     app.router.add_get("/health", health)
     app.router.add_get("/tonconnect-manifest.json", handle_ton_manifest)
     app.router.add_get("/api/me", api_me)
