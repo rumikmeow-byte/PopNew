@@ -7,9 +7,10 @@ import os
 import sys
 import time
 from pathlib import Path
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, quote
 
-from aiohttp import web
+import aiosqlite
+from aiohttp import ClientSession, web
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -21,13 +22,14 @@ from config import (
     MAX_DEPOSIT_STARS,
     MIN_DEPOSIT_STARS,
     MIN_DEPOSIT_TON,
-    TON_TO_STARS_RATE,
+    TON_API_KEY,
 )
 from db import (
     init_db,
     get_user,
     get_referral_stats,
     update_balance,
+    update_ton_balance,
     set_free_case_time,
     reset_share_count,
     increment_share_count,
@@ -181,12 +183,103 @@ async def api_deposit(request: web.Request):
     return await api_stars_invoice(request)
 
 
-async def api_check_deposit(request: web.Request):
-    validate_webapp_user(request)
+async def api_ton_deposit(request: web.Request):
+    user_id, _ = validate_webapp_user(request)
+    if not BOT_WALLET_ADDRESS:
+        return web.json_response({"ok": False, "message": "TON-кошелёк GIFTSMMS пока не настроен."})
+    try:
+        amount = float((await request.json()).get("amount", 0))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        amount = 0
+    if amount < MIN_DEPOSIT_TON:
+        return web.json_response({"ok": False, "message": f"Минимум для TON: {MIN_DEPOSIT_TON:g} TON."})
+    nonce = secrets.token_hex(6)
+    comment = f"GIFTSMMS:{user_id}:{nonce}"
+    tx_key = f"intent:{user_id}:{nonce}"
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute(
+            "INSERT INTO ton_deposits (user_id,tx_hash,amount_ton,destination,status,created_at) VALUES (?,?,?,?,?,?)",
+            (user_id, tx_key, amount, BOT_WALLET_ADDRESS, "pending", int(time.time())),
+        )
+        await db.commit()
+    # TON amounts are nanocoins in the transfer URI. Stars and TON remain separate balances.
+    nano = int(round(amount * 1_000_000_000))
+    ton_uri = f"ton://transfer/{BOT_WALLET_ADDRESS}?amount={nano}&text={quote(comment)}"
     return web.json_response({
-        "ok": False,
-        "message": "Проверка TON-депозита отключена. Используйте Telegram Stars для пополнения GIFTSMMS.",
+        "ok": True,
+        "amount": amount,
+        "comment": comment,
+        "destination": BOT_WALLET_ADDRESS,
+        "ton_uri": ton_uri,
+        "message": "Отправьте TON на адрес GIFTSMMS, затем вставьте hash транзакции для проверки.",
     })
+
+
+async def api_ton_confirm(request: web.Request):
+    user_id, _ = validate_webapp_user(request)
+    if not BOT_WALLET_ADDRESS or not TON_API_KEY:
+        return web.json_response({"ok": False, "message": "TON-проверка не настроена: нужны BOT_WALLET_ADDRESS и TON_API_KEY."})
+    try:
+        body = await request.json()
+        tx_hash = str(body.get("tx_hash", "")).strip().lower()
+    except (TypeError, ValueError, json.JSONDecodeError):
+        tx_hash = ""
+    if len(tx_hash) < 40 or len(tx_hash) > 128:
+        return web.json_response({"ok": False, "message": "Укажите корректный hash TON-транзакции."})
+
+    async with aiosqlite.connect(DB_NAME) as db:
+        async with db.execute(
+            "SELECT deposit_id,amount_ton,status FROM ton_deposits WHERE user_id=? AND status='pending' ORDER BY deposit_id DESC LIMIT 1",
+            (user_id,),
+        ) as cursor:
+            intent = await cursor.fetchone()
+    if not intent:
+        return web.json_response({"ok": False, "message": "Сначала создайте заявку на TON-пополнение."})
+
+    headers = {"Authorization": f"Bearer {TON_API_KEY}"}
+    url = f"https://tonapi.io/v2/blockchain/transactions/{tx_hash}"
+    try:
+        async with ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=12) as response:
+                if response.status != 200:
+                    return web.json_response({"ok": False, "message": "TON-транзакция пока не найдена. Проверьте hash через несколько секунд."})
+                tx = await response.json()
+    except Exception:
+        return web.json_response({"ok": False, "message": "Не удалось проверить TON-транзакцию сейчас."})
+
+    in_msg = tx.get("in_msg") or {}
+    destination = str((in_msg.get("destination") or {}).get("address") or in_msg.get("destination") or "")
+    source = str((in_msg.get("source") or {}).get("address") or in_msg.get("source") or "")
+    value_nano = int(in_msg.get("value") or 0)
+    message = str(in_msg.get("message") or "")
+    decoded = in_msg.get("decoded_body") or {}
+    if isinstance(decoded, dict):
+        message = message or str(decoded.get("comment") or decoded.get("text") or "")
+
+    expected_amount = float(intent[1])
+    expected_nano = int(round(expected_amount * 1_000_000_000))
+    expected_prefix = f"GIFTSMMS:{user_id}:"
+    if destination and destination != BOT_WALLET_ADDRESS:
+        return web.json_response({"ok": False, "message": "Эта транзакция отправлена не на кошелёк GIFTSMMS."})
+    if value_nano < expected_nano or not message.startswith(expected_prefix):
+        return web.json_response({"ok": False, "message": "Транзакция найдена, но сумма или комментарий не совпадают с заявкой."})
+
+    async with aiosqlite.connect(DB_NAME) as db:
+        async with db.execute("SELECT status FROM ton_deposits WHERE tx_hash=?", (tx_hash,)) as cursor:
+            existing = await cursor.fetchone()
+        if existing:
+            return web.json_response({"ok": False, "message": "Эта транзакция уже была обработана."})
+        await db.execute(
+            "UPDATE ton_deposits SET tx_hash=?, source_address=?, status='confirmed', confirmed_at=? WHERE deposit_id=? AND status='pending'",
+            (tx_hash, source or None, int(time.time()), intent[0]),
+        )
+        await db.commit()
+    await update_ton_balance(user_id, expected_amount)
+    return web.json_response({"ok": True, "credited_ton": expected_amount, "profile": await get_user(user_id)})
+
+
+async def api_check_deposit(request: web.Request):
+    return await api_ton_confirm(request)
 
 
 async def api_public_battle(request: web.Request):
@@ -229,6 +322,8 @@ async def main():
     app.router.add_post("/api/free-case", api_free_case)
     app.router.add_get("/api/referrals", api_referrals)
     app.router.add_post("/api/deposit", api_deposit)
+    app.router.add_post("/api/ton/deposit", api_ton_deposit)
+    app.router.add_post("/api/ton/confirm", api_ton_confirm)
     app.router.add_post("/api/deposit/check", api_check_deposit)
     app.router.add_get("/api/public-battle", api_public_battle)
     app.router.add_post("/api/public-battle/join", api_public_battle_join)
