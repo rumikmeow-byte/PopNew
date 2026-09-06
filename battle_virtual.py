@@ -9,7 +9,7 @@ MIN_REAL_PLAYERS = 2
 
 
 class VirtualBattle:
-    """Public battle with real Telegram users only; no bots or synthetic players."""
+    """Public virtual-points battle with real Telegram users only."""
 
     def __init__(self, db_name: str):
         self.db_name = db_name
@@ -23,8 +23,17 @@ class VirtualBattle:
                 winner_id INTEGER, seed TEXT NOT NULL, hash TEXT NOT NULL)""")
             await db.execute("""CREATE TABLE IF NOT EXISTS public_battle_players (
                 battle_id INTEGER NOT NULL, user_id INTEGER NOT NULL, bet_points INTEGER NOT NULL,
-                joined_at INTEGER NOT NULL, PRIMARY KEY (battle_id, user_id))""")
+                display_name TEXT NOT NULL DEFAULT 'Игрок', joined_at INTEGER NOT NULL,
+                PRIMARY KEY (battle_id, user_id))""")
+            await self._ensure_column(db, "public_battle_players", "display_name", "TEXT NOT NULL DEFAULT 'Игрок'")
             await db.commit()
+
+    @staticmethod
+    async def _ensure_column(db, table: str, column: str, definition: str):
+        async with db.execute(f"PRAGMA table_info({table})") as cur:
+            columns = {row[1] for row in await cur.fetchall()}
+        if column not in columns:
+            await db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
     async def _ensure_round(self, db):
         async with db.execute("SELECT battle_id,status FROM public_battles WHERE status IN ('waiting','active') ORDER BY battle_id DESC LIMIT 1") as cur:
@@ -69,19 +78,34 @@ class VirtualBattle:
             battle_id = await self._ensure_round(db)
             async with db.execute("SELECT status,created_at,countdown_end,winner_id,hash FROM public_battles WHERE battle_id=?", (battle_id,)) as cur:
                 battle = await cur.fetchone()
-            async with db.execute("SELECT user_id,bet_points FROM public_battle_players WHERE battle_id=? ORDER BY joined_at", (battle_id,)) as cur:
+            async with db.execute("SELECT user_id,bet_points,display_name FROM public_battle_players WHERE battle_id=? ORDER BY joined_at", (battle_id,)) as cur:
                 players = await cur.fetchall()
             await db.execute("INSERT OR IGNORE INTO virtual_battle_users(user_id,points) VALUES (?,1000)", (user_id,))
             async with db.execute("SELECT points FROM virtual_battle_users WHERE user_id=?", (user_id,)) as cur:
                 points = (await cur.fetchone())[0]
             await db.commit()
-        total = sum(int(bet) for _, bet in players)
-        return {"battle_id": battle_id, "status": battle[0], "created_at": battle[1], "countdown_end": battle[2], "winner_id": battle[3], "hash": battle[4], "points": points, "bank": total, "min_players": MIN_REAL_PLAYERS, "players": [{"user_id": uid, "bet": int(bet), "chance": round((int(bet) / total) * 100, 2) if total else 0} for uid, bet in players]}
+        total = sum(int(bet) for _, bet, _ in players)
+        return {
+            "battle_id": battle_id,
+            "status": battle[0],
+            "created_at": battle[1],
+            "countdown_end": battle[2],
+            "winner_id": battle[3],
+            "hash": battle[4],
+            "points": points,
+            "bank": total,
+            "min_players": MIN_REAL_PLAYERS,
+            "players": [
+                {"user_id": uid, "name": name, "bet": int(bet), "chance": round((int(bet) / total) * 100, 2) if total else 0}
+                for uid, bet, name in players
+            ],
+        }
 
-    async def join(self, user_id: int, amount: int):
+    async def join(self, user_id: int, amount: int, display_name: str = "Игрок"):
         amount = int(amount)
         if amount not in (25, 100, 500):
             return {"ok": False, "message": "Выбери 25, 100 или 500 виртуальных очков."}
+        display_name = (display_name or "Игрок").strip()[:64] or "Игрок"
         async with aiosqlite.connect(self.db_name) as db:
             await self._resolve_if_due(db)
             battle_id = await self._ensure_round(db)
@@ -99,7 +123,7 @@ class VirtualBattle:
                     return {"ok": False, "message": "Ты уже в этом раунде."}
             now = int(time.time())
             await db.execute("UPDATE virtual_battle_users SET points=points-? WHERE user_id=?", (amount, user_id))
-            await db.execute("INSERT INTO public_battle_players(battle_id,user_id,bet_points,joined_at) VALUES (?,?,?,?)", (battle_id, user_id, amount, now))
+            await db.execute("INSERT INTO public_battle_players(battle_id,user_id,bet_points,display_name,joined_at) VALUES (?,?,?,?,?)", (battle_id, user_id, amount, display_name, now))
             async with db.execute("SELECT COUNT(*) FROM public_battle_players WHERE battle_id=?", (battle_id,)) as cur:
                 count = (await cur.fetchone())[0]
             if count >= MIN_REAL_PLAYERS:
