@@ -22,10 +22,12 @@
       .g-rocket.running { animation:gRocketFly .7s ease-in-out infinite alternate; }
       .g-count { text-shadow:0 0 18px rgba(53,217,255,.65); transition:transform .25s ease, opacity .25s ease; }
       .g-count.tick { transform:scale(1.12); }
-      .g-bet { transition:transform .18s ease, box-shadow .18s ease, opacity .18s ease; }
+      .g-bet { min-height:34px!important; padding:7px 8px!important; border-radius:11px!important; font-size:12px!important; font-weight:800; transition:transform .18s ease, box-shadow .18s ease, opacity .18s ease; }
       .g-bet:not(:disabled):active { transform:scale(.96); }
+      .g-bet:disabled { opacity:.45; cursor:not-allowed; }
       .g-player { animation:gPlayerIn .35s ease both; }
       .g-chip { padding:5px 9px;border-radius:999px;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.07); }
+      .g-legacy-anchor { position:absolute!important;width:1px!important;height:1px!important;overflow:hidden!important;opacity:0!important;pointer-events:none!important; }
       @keyframes gBattleIn { from{opacity:0;transform:translateY(12px) scale(.985)} to{opacity:1;transform:none} }
       @keyframes gPlayerIn { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:none} }
       @keyframes gWheelFloat { 0%,100%{transform:translateY(0) rotate(0deg)} 50%{transform:translateY(-4px) rotate(1deg)} }
@@ -78,8 +80,9 @@
           <div style="position:absolute;top:7px;left:50%;transform:translateX(-50%);font-size:21px;text-shadow:0 0 12px rgba(255,255,255,.3)">▼</div>
           <div class="g-count" style="position:absolute;bottom:9px;left:50%;transform:translateX(-50%);font-weight:900;font-size:22px;white-space:nowrap">🚀 ${statusText}</div>
           <div style="position:absolute;top:12px;right:12px;font-size:12px;opacity:.7">500 ⭐ / 0</div>
+          <div id="rocketTimer" class="g-legacy-anchor">10.0s</div><div id="battleTimer" class="g-legacy-anchor">ОЖИДАНИЕ</div><div id="battleProgress" class="g-legacy-anchor"></div>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+        <div class="g-bets" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px">
           ${[25,100,500].map(amount => `<button class="btn g-bet" onclick="joinPublicBattle(${amount})" ${active ? "disabled" : ""}>${amount} pts</button>`).join("")}
         </div>
         <div class="sub" style="margin-top:10px">Твои очки: <b>${data.points}</b> · шанс зависит от твоей доли банка</div>
