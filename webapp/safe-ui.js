@@ -26,6 +26,16 @@
       btn.textContent = `${btn.dataset.bet} очков`;
     });
 
+    const arenaCard = document.querySelector('#arenaMode .card');
+    if (arenaCard && !document.getElementById('arenaWallet')) {
+      const wallet = document.createElement('div');
+      wallet.id = 'arenaWallet';
+      wallet.style.cssText = 'margin-top:10px;padding:12px 14px;border-radius:16px;background:#202024;font-size:13px;line-height:1.4';
+      wallet.innerHTML = 'Баланс арены: <b id="arenaPoints">0</b> ◆<br><span style="color:#aaa">Для ставки сначала пополните баланс через ⭐ Stars или TON.</span><br><button id="arenaTopup" style="margin-top:9px;width:100%;height:42px;border:0;border-radius:12px;background:#fff;color:#111;font-weight:900">⭐ / TON Пополнить</button>';
+      arenaCard.appendChild(wallet);
+      document.getElementById('arenaTopup').onclick = () => document.getElementById('topDeposit')?.click();
+    }
+
     const ref = document.querySelector('.ref');
     if (ref) {
       const heading = ref.querySelector('h3');
@@ -40,8 +50,14 @@
         oldRenderArena(data);
         const bank = document.getElementById('arenaBank');
         if (bank) bank.textContent = Number(data?.bank || 0).toLocaleString('ru-RU');
+        const points = document.getElementById('arenaPoints');
+        if (points) points.textContent = Number(data?.points || 0).toLocaleString('ru-RU');
         document.querySelectorAll('#arenaPlayers .gold').forEach(el => {
           el.textContent = el.textContent.replace(/^⭐\s*/, '◆ ');
+        });
+        document.querySelectorAll('[data-arena]').forEach(btn => {
+          btn.disabled = Number(data?.points || 0) < Number(btn.dataset.arena || 0);
+          btn.title = btn.disabled ? 'Сначала пополните баланс через ⭐ или TON' : '';
         });
       };
       wrapped.__safeWrapped = true;
