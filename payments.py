@@ -11,7 +11,6 @@ from aiogram.filters import Command
 from aiogram.types import LabeledPrice, PreCheckoutQuery
 
 from config import BOT_TOKEN, BOT_NAME, MAX_DEPOSIT_STARS, DB_NAME, MIN_DEPOSIT_STARS
-from db import update_balance
 
 payments_router = Router()
 
@@ -78,8 +77,7 @@ async def record_payment(payment_key, user_id, method, stars_amount, charge_id=N
 async def confirm_payment(payment_key, user_id):
     async with aiosqlite.connect(DB_NAME) as db:
         cur = await db.execute(
-            """UPDATE payment_records
-               SET status='confirmed', confirmed_at=?
+            """UPDATE payment_records SET status='confirmed', confirmed_at=?
                WHERE payment_key=? AND user_id=? AND status='pending'""",
             (int(time.time()), payment_key, user_id),
         )
@@ -95,7 +93,7 @@ async def payment_is_confirmed(payment_key, user_id):
 
 
 async def credit_confirmed_stars(user_id: int, amount: int, payment_key: str):
-    """Atomically credit the payer and the inviter's 10% bonus exactly once."""
+    """Atomically credit the payer and inviter's 10% bonus exactly once."""
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute("BEGIN IMMEDIATE")
         async with db.execute("SELECT status FROM payment_records WHERE payment_key=? AND user_id=?", (payment_key, user_id)) as cur:
@@ -123,11 +121,9 @@ async def api_stars_invoice(request: web.Request):
         amount = 0
     if amount < MIN_DEPOSIT_STARS or amount > MAX_DEPOSIT_STARS:
         return web.json_response({"ok": False, "message": f"Сумма должна быть от {MIN_DEPOSIT_STARS} до {MAX_DEPOSIT_STARS} ⭐."})
-
     nonce = int(time.time() * 1000)
     payload = f"stars_deposit:{user_id}:{amount}:{nonce}"
     await record_payment(payload, user_id, "stars", amount)
-
     bot = request.app["bot"]
     invoice_link = await bot.create_invoice_link(
         title=f"GiftsEZZ — {amount} ⭐",
@@ -172,26 +168,21 @@ async def successful_stars_payment(message: types.Message):
         return
     if message.from_user.id != user_id or payment.total_amount != amount:
         return
-
     charge_id = payment.telegram_payment_charge_id
     key = f"stars_charge:{charge_id}"
-    inserted = await record_payment(key, user_id, "stars", amount, charge_id=charge_id)
-    if inserted:
-        credited, bonus = await credit_confirmed_stars(user_id, amount, key)
-        if credited:
-            try:
-                suffix = f" + {bonus:g} ⭐ реферального бонуса" if bonus else ""
-                await message.answer(f"✅ GiftsEZZ: на баланс зачислено {amount} ⭐.{suffix}")
-            except Exception:
-                pass
+    await record_payment(key, user_id, "stars", amount, charge_id=charge_id)
+    credited, bonus = await credit_confirmed_stars(user_id, amount, key)
+    if credited:
+        try:
+            suffix = f" + {bonus:g} ⭐ реферального бонуса" if bonus else ""
+            await message.answer(f"✅ GiftsEZZ: на баланс зачислено {amount} ⭐.{suffix}")
+        except Exception:
+            pass
 
 
 @payments_router.message(Command("paysupport"))
 async def paysupport_handler(message: types.Message):
-    await message.answer(
-        f"Поддержка {BOT_NAME}: если платёж Stars не зачислился, пришлите сюда номер платежа "
-        "из чека Telegram и ваш @username."
-    )
+    await message.answer(f"Поддержка {BOT_NAME}: если платёж Stars не зачислился, пришлите номер платежа из чека Telegram и ваш @username.")
 
 
 def register_payment_routes(app: web.Application):
