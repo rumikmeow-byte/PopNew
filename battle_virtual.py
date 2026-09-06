@@ -47,9 +47,28 @@ class VirtualBattle:
             await db.commit()
         return True
 
+    async def _sync_ton_funding(self, db, user_id: int):
+        """Turn already-confirmed TON top-ups into non-cash virtual points once."""
+        try:
+            async with db.execute("SELECT ton_balance FROM users WHERE user_id=?", (user_id,)) as cur:
+                row = await cur.fetchone()
+            ton_balance = float(row[0] or 0) if row else 0.0
+        except Exception:
+            ton_balance = 0.0
+        if ton_balance <= 0:
+            return 0
+        points = int(ton_balance * TON_TO_POINTS)
+        if points <= 0:
+            return 0
+        await db.execute("INSERT OR IGNORE INTO virtual_battle_users(user_id,points) VALUES (?,0)", (user_id,))
+        await db.execute("UPDATE virtual_battle_users SET points=points+? WHERE user_id=?", (points, user_id))
+        await db.execute("UPDATE users SET ton_balance=0 WHERE user_id=?", (user_id,))
+        return points
+
     async def get_points(self, user_id: int):
         async with aiosqlite.connect(self.db_name) as db:
             await db.execute("INSERT OR IGNORE INTO virtual_battle_users(user_id,points) VALUES (?,0)", (user_id,))
+            await self._sync_ton_funding(db, user_id)
             async with db.execute("SELECT points FROM virtual_battle_users WHERE user_id=?", (user_id,)) as cur:
                 points = int((await cur.fetchone())[0])
             await db.commit()
@@ -96,12 +115,13 @@ class VirtualBattle:
     async def snapshot(self, user_id: int):
         async with aiosqlite.connect(self.db_name) as db:
             await self._resolve_if_due(db)
+            await db.execute("INSERT OR IGNORE INTO virtual_battle_users(user_id,points) VALUES (?,0)", (user_id,))
+            await self._sync_ton_funding(db, user_id)
             battle_id = await self._ensure_round(db)
             async with db.execute("SELECT status,created_at,countdown_end,winner_id,hash FROM public_battles WHERE battle_id=?", (battle_id,)) as cur:
                 battle = await cur.fetchone()
             async with db.execute("SELECT user_id,bet_points,display_name FROM public_battle_players WHERE battle_id=? ORDER BY joined_at", (battle_id,)) as cur:
                 players = await cur.fetchall()
-            await db.execute("INSERT OR IGNORE INTO virtual_battle_users(user_id,points) VALUES (?,0)", (user_id,))
             async with db.execute("SELECT points FROM virtual_battle_users WHERE user_id=?", (user_id,)) as cur:
                 points = int((await cur.fetchone())[0])
             await db.commit()
@@ -129,12 +149,13 @@ class VirtualBattle:
         display_name = (display_name or "Игрок").strip()[:64] or "Игрок"
         async with aiosqlite.connect(self.db_name) as db:
             await self._resolve_if_due(db)
+            await db.execute("INSERT OR IGNORE INTO virtual_battle_users(user_id,points) VALUES (?,0)", (user_id,))
+            await self._sync_ton_funding(db, user_id)
             battle_id = await self._ensure_round(db)
             async with db.execute("SELECT status FROM public_battles WHERE battle_id=?", (battle_id,)) as cur:
                 status = (await cur.fetchone())[0]
             if status != "waiting":
                 return {"ok": False, "message": "Раунд уже запущен. Дождитесь следующего."}
-            await db.execute("INSERT OR IGNORE INTO virtual_battle_users(user_id,points) VALUES (?,0)", (user_id,))
             async with db.execute("SELECT points FROM virtual_battle_users WHERE user_id=?", (user_id,)) as cur:
                 points = int((await cur.fetchone())[0])
             if points < amount:
