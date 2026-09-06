@@ -17,12 +17,11 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
 from config import BOT_TOKEN, BOT_WALLET_ADDRESS, DB_NAME, MIN_DEPOSIT_TON, TON_API_KEY
-from db import get_referral_stats, get_user, increment_share_count, reset_share_count, set_free_case_time, update_balance, update_ton_balance
+from db import get_referral_stats, get_user, increment_share_count, update_ton_balance
 from user_handlers import handlers_router
 from miniapp_commands import router as miniapp_commands_router
 from admin_handlers import admin_router
 from payments import api_stars_invoice, init_payment_db, payments_router, register_payment_routes
-from utils import check_all_subscriptions
 from crash_engine import init_crash_db, register_crash_routes, crash_state, place_crash_bet, cashout_crash_bet
 from battle_virtual import VirtualBattle
 from ton_battle import TonBattle
@@ -39,7 +38,7 @@ ton_battle = TonBattle(DB_NAME)
 
 
 def validate_webapp_user(request):
-    init_data = request.headers.get("X-Telegram-Init-Data", "")
+    init_data = request.headers.get("X-Telegram-Init-Data", "") or request.query.get("initData", "")
     if not init_data:
         raise web.HTTPUnauthorized(text="Telegram initData is required")
     pairs = dict(parse_qsl(init_data, keep_blank_values=True))
@@ -111,7 +110,7 @@ async def api_case_access(request):
     user = await get_user(uid)
     subscribed = await case_subscription_ok(request.app["bot"], uid)
     ref_count, _ = await get_referral_stats(uid)
-    available = int(time.time()) - user["free_case_time"] >= 86400
+    available = int(time.time()) - int(user["free_case_time"] or 0) >= 86400
     return web.json_response({
         "ok": subscribed and ref_count >= 3 and available,
         "subscribed": subscribed,
@@ -143,9 +142,9 @@ async def api_free_case(request):
             user = await cur.fetchone()
         if not user:
             await db.execute("INSERT INTO users(user_id) VALUES(?)", (uid,))
-            balance, free_case_time = 0.0, 0
+            free_case_time = 0
         else:
-            balance, free_case_time = float(user[0] or 0), int(user[1] or 0)
+            free_case_time = int(user[1] or 0)
         async with db.execute("SELECT COUNT(*) FROM referrals WHERE inviter_id=?", (uid,)) as cur:
             ref_count = int((await cur.fetchone())[0])
         if now - free_case_time < 86400:
