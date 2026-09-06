@@ -26,6 +26,14 @@
       btn.textContent = `${btn.dataset.bet} очков`;
     });
 
+    const ref = document.querySelector('.ref');
+    if (ref) {
+      const heading = ref.querySelector('h3');
+      const text = ref.querySelector('p');
+      if (heading) heading.textContent = 'Пригласите друзей · +0.85 ⭐';
+      if (text) text.textContent = '+0.85 ⭐ за каждого приглашённого. Для кейса нужны 3 реальных приглашённых.';
+    }
+
     const oldRenderArena = window.renderArena;
     if (typeof oldRenderArena === 'function' && !oldRenderArena.__safeWrapped) {
       const wrapped = function (data) {
