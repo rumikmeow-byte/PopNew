@@ -19,6 +19,7 @@ from aiogram.enums import ParseMode
 from config import BOT_TOKEN, BOT_WALLET_ADDRESS, DB_NAME, MAX_DEPOSIT_STARS, MIN_DEPOSIT_STARS, MIN_DEPOSIT_TON, TON_API_KEY
 from db import init_db, get_user, get_referral_stats, update_balance, update_ton_balance, set_free_case_time, reset_share_count, increment_share_count
 from user_handlers import handlers_router
+from miniapp_commands import router as miniapp_commands_router
 from admin_handlers import admin_router
 from payments import payments_router, init_payment_db, register_payment_routes, api_stars_invoice
 from utils import check_all_subscriptions
@@ -114,7 +115,8 @@ async def api_public_battle_join(request):
 async def main():
     await init_db(); await init_payment_db(); await init_crash_db(DB_NAME); await virtual_battle.init()
     bot=Bot(token=BOT_TOKEN,default=DefaultBotProperties(parse_mode=ParseMode.HTML)); features=MiniAppFeatures(DB_NAME,bot); await features.init()
-    dp=Dispatcher(); dp.include_router(handlers_router); dp.include_router(admin_router); dp.include_router(payments_router)
+    webapp_url=os.getenv("WEBAPP_URL","").strip(); bot._miniapp_url=webapp_url
+    dp=Dispatcher(); dp.include_router(handlers_router); dp.include_router(miniapp_commands_router); dp.include_router(admin_router); dp.include_router(payments_router)
     app=web.Application(); app["bot"]=bot
     app.router.add_get("/",handle_index); app.router.add_get("/battle-virtual.js",file_handler("battle-virtual.js")); app.router.add_get("/ton-payments.js",file_handler("ton-payments.js")); app.router.add_get("/health",health)
     app.router.add_get("/tonconnect-manifest.json",lambda r:web.json_response({"url":str(r.url.with_path('/').with_query('')),"name":APP_NAME,"iconUrl":str(r.url.with_path('/giftsmms-logo.svg').with_query(''))}))
