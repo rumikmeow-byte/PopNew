@@ -15,6 +15,9 @@
     }
     if (arenaMode) arenaMode.style.display = 'block';
 
+    // Only real Telegram players are shown. Remove all static/bot/AFK placeholders.
+    document.querySelectorAll('#arenaMode .arena-player').forEach(el => el.remove());
+
     document.querySelectorAll('[data-arena]').forEach(btn => {
       btn.textContent = `${btn.dataset.arena} очков`;
     });
@@ -48,6 +51,7 @@
     if (typeof oldRenderArena === 'function' && !oldRenderArena.__safeWrapped) {
       const wrapped = function (data) {
         oldRenderArena(data);
+        document.querySelectorAll('#arenaMode .arena-player').forEach(el => el.remove());
         const bank = document.getElementById('arenaBank');
         if (bank) bank.textContent = Number(data?.bank || 0).toLocaleString('ru-RU');
         const points = document.getElementById('arenaPoints');
@@ -59,10 +63,35 @@
           btn.disabled = Number(data?.points || 0) < Number(btn.dataset.arena || 0);
           btn.title = btn.disabled ? 'Сначала пополните баланс через ⭐ или TON' : '';
         });
+        updateCountdown(data);
       };
       wrapped.__safeWrapped = true;
       window.renderArena = wrapped;
     }
+
+    let countdownTimer = null;
+    let lastArenaData = null;
+    const updateCountdown = (data) => {
+      lastArenaData = data;
+      const el = document.getElementById('arenaCount');
+      if (!el) return;
+      const end = Number(data?.countdown_end || 0);
+      const status = data?.status;
+      const players = Array.isArray(data?.players) ? data.players.length : 0;
+      if (!end) {
+        el.textContent = 'Ожидание игроков';
+        return;
+      }
+      const seconds = Math.max(0, end - Math.floor(Date.now() / 1000));
+      if (status === 'waiting') {
+        el.textContent = `До начала: ${seconds} сек · ${players}/${data?.min_players || 2}`;
+      } else if (status === 'active') {
+        el.textContent = `Игра идёт: ${seconds} сек`;
+      } else {
+        el.textContent = 'Новый раунд скоро';
+      }
+    };
+    countdownTimer = window.setInterval(() => updateCountdown(lastArenaData), 250);
 
     const showGate = () => {
       if (document.getElementById('subscriptionGate')) return;
