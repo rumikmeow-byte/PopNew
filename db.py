@@ -249,6 +249,13 @@ async def get_referral_stats(user_id: int):
         return count, (row[0] if row else 0)
 
 
+async def get_all_channels():
+    async with aiosqlite.connect(DB_NAME) as db:
+        async with db.execute("SELECT username FROM channels ORDER BY id") as cursor:
+            rows = await cursor.fetchall()
+    return [row[0] for row in rows if row[0]]
+
+
 # Compatibility for legacy handlers. Real Stars/TON battle wagering is disabled.
 async def create_battle(*args, **kwargs):
     return None
