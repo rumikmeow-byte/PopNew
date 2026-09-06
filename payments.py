@@ -93,7 +93,7 @@ async def payment_is_confirmed(payment_key, user_id):
 
 
 async def credit_confirmed_stars(user_id: int, amount: int, payment_key: str):
-    """Atomically credit the payer and inviter's 10% bonus exactly once."""
+    """Atomically credit a confirmed Stars purchase exactly once."""
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute("BEGIN IMMEDIATE")
         async with db.execute("SELECT status FROM payment_records WHERE payment_key=? AND user_id=?", (payment_key, user_id)) as cur:
@@ -102,14 +102,12 @@ async def credit_confirmed_stars(user_id: int, amount: int, payment_key: str):
             await db.rollback()
             return False, 0.0
         await db.execute("UPDATE users SET balance=balance+? WHERE user_id=?", (amount, user_id))
-        async with db.execute("SELECT inviter_id FROM referrals WHERE invited_id=? LIMIT 1", (user_id,)) as cur:
-            inviter = await cur.fetchone()
-        bonus = round(float(amount) * 0.10, 2) if inviter else 0.0
-        if inviter and bonus > 0:
-            await db.execute("UPDATE users SET balance=balance+?, ref_earned=ref_earned+? WHERE user_id=?", (bonus, bonus, inviter[0]))
-        await db.execute("UPDATE payment_records SET status='confirmed', confirmed_at=? WHERE payment_key=? AND user_id=? AND status='pending'", (int(time.time()), payment_key, user_id))
+        await db.execute(
+            "UPDATE payment_records SET status='confirmed', confirmed_at=? WHERE payment_key=? AND user_id=? AND status='pending'",
+            (int(time.time()), payment_key, user_id),
+        )
         await db.commit()
-        return True, bonus
+        return True, 0.0
 
 
 async def api_stars_invoice(request: web.Request):
@@ -171,11 +169,10 @@ async def successful_stars_payment(message: types.Message):
     charge_id = payment.telegram_payment_charge_id
     key = f"stars_charge:{charge_id}"
     await record_payment(key, user_id, "stars", amount, charge_id=charge_id)
-    credited, bonus = await credit_confirmed_stars(user_id, amount, key)
+    credited, _bonus = await credit_confirmed_stars(user_id, amount, key)
     if credited:
         try:
-            suffix = f" + {bonus:g} ⭐ реферального бонуса" if bonus else ""
-            await message.answer(f"✅ GiftsEZZ: на баланс зачислено {amount} ⭐.{suffix}")
+            await message.answer(f"✅ GiftsEZZ: на баланс зачислено {amount} ⭐.")
         except Exception:
             pass
 
