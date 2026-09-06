@@ -6,6 +6,7 @@ import aiosqlite
 
 
 MIN_REAL_PLAYERS = 2
+ROUND_WAIT_SECONDS = 15
 STARS_TO_POINTS = 100
 TON_TO_POINTS = 10000
 
@@ -79,21 +80,36 @@ class VirtualBattle:
             row = await cur.fetchone()
         if row:
             return row[0]
+        now = int(time.time())
         seed = secrets.token_hex(32)
         commitment = hashlib.sha256(seed.encode()).hexdigest()
-        cur = await db.execute("INSERT INTO public_battles(status,created_at,seed,hash) VALUES ('waiting',?,?,?)", (int(time.time()), seed, commitment))
+        cur = await db.execute(
+            "INSERT INTO public_battles(status,created_at,countdown_end,seed,hash) VALUES ('waiting',?,?,?,?)",
+            (now, now + ROUND_WAIT_SECONDS, seed, commitment),
+        )
         await db.commit()
         return cur.lastrowid
 
     async def _resolve_if_due(self, db):
         now = int(time.time())
-        async with db.execute("SELECT battle_id,countdown_end,seed FROM public_battles WHERE status='active' AND countdown_end <= ? ORDER BY battle_id", (now,)) as cur:
-            due = await cur.fetchall()
-        for battle_id, _, seed in due:
+        async with db.execute("SELECT battle_id,countdown_end,seed FROM public_battles WHERE status='waiting' AND countdown_end <= ? ORDER BY battle_id", (now,)) as cur:
+            waiting_due = await cur.fetchall()
+        for battle_id, _, seed in waiting_due:
             async with db.execute("SELECT user_id,bet_points FROM public_battle_players WHERE battle_id=? ORDER BY joined_at", (battle_id,)) as cur:
                 players = await cur.fetchall()
             if len(players) < MIN_REAL_PLAYERS:
-                await db.execute("UPDATE public_battles SET status='waiting',countdown_end=NULL WHERE battle_id=? AND status='active'", (battle_id,))
+                # No bots or AFK placeholders: an under-filled round simply expires.
+                await db.execute("UPDATE public_battles SET status='finished',ended_at=? WHERE battle_id=? AND status='waiting'", (now, battle_id))
+                continue
+            await db.execute("UPDATE public_battles SET status='active',countdown_end=? WHERE battle_id=? AND status='waiting'", (now + 10, battle_id))
+
+        async with db.execute("SELECT battle_id,countdown_end,seed FROM public_battles WHERE status='active' AND countdown_end <= ? ORDER BY battle_id", (now,)) as cur:
+            active_due = await cur.fetchall()
+        for battle_id, _, seed in active_due:
+            async with db.execute("SELECT user_id,bet_points FROM public_battle_players WHERE battle_id=? ORDER BY joined_at", (battle_id,)) as cur:
+                players = await cur.fetchall()
+            if len(players) < MIN_REAL_PLAYERS:
+                await db.execute("UPDATE public_battles SET status='finished',ended_at=? WHERE battle_id=? AND status='active'", (now, battle_id))
                 continue
             total = sum(max(0, int(bet)) for _, bet in players)
             ticket = int.from_bytes(hashlib.sha256(f"{seed}:{battle_id}".encode()).digest()[:8], "big") % total if total else 0
@@ -104,12 +120,11 @@ class VirtualBattle:
                 if total and ticket < cursor:
                     winner = user_id
                     break
-            # The winner receives virtual points only. They are never converted to Stars/TON.
             if winner is not None:
                 await db.execute("INSERT OR IGNORE INTO virtual_battle_users(user_id,points) VALUES (?,0)", (winner,))
                 await db.execute("UPDATE virtual_battle_users SET points=points+? WHERE user_id=?", (total, winner))
             await db.execute("UPDATE public_battles SET status='finished',ended_at=?,winner_id=? WHERE battle_id=? AND status='active'", (now, winner, battle_id))
-        if due:
+        if waiting_due or active_due:
             await db.commit()
 
     async def snapshot(self, user_id: int):
@@ -155,7 +170,7 @@ class VirtualBattle:
             async with db.execute("SELECT status FROM public_battles WHERE battle_id=?", (battle_id,)) as cur:
                 status = (await cur.fetchone())[0]
             if status != "waiting":
-                return {"ok": False, "message": "Раунд уже запущен. Дождитесь следующего."}
+                return {"ok": False, "message": "Раунд уже начался. Дождитесь следующего раунда."}
             async with db.execute("SELECT points FROM virtual_battle_users WHERE user_id=?", (user_id,)) as cur:
                 points = int((await cur.fetchone())[0])
             if points < amount:
@@ -166,9 +181,5 @@ class VirtualBattle:
             now = int(time.time())
             await db.execute("UPDATE virtual_battle_users SET points=points-? WHERE user_id=?", (amount, user_id))
             await db.execute("INSERT INTO public_battle_players(battle_id,user_id,bet_points,display_name,joined_at) VALUES (?,?,?,?,?)", (battle_id, user_id, amount, display_name, now))
-            async with db.execute("SELECT COUNT(*) FROM public_battle_players WHERE battle_id=?", (battle_id,)) as cur:
-                count = (await cur.fetchone())[0]
-            if count >= MIN_REAL_PLAYERS:
-                await db.execute("UPDATE public_battles SET status='active',countdown_end=? WHERE battle_id=? AND status='waiting'", (now + 10, battle_id))
             await db.commit()
         return {"ok": True, "battle": await self.snapshot(user_id)}
