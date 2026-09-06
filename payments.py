@@ -11,6 +11,7 @@ from aiogram.filters import Command
 from aiogram.types import LabeledPrice, PreCheckoutQuery
 
 from config import BOT_TOKEN, BOT_NAME, MAX_DEPOSIT_STARS, DB_NAME, MIN_DEPOSIT_STARS
+from battle_virtual import STARS_TO_POINTS
 
 payments_router = Router()
 
@@ -74,26 +75,8 @@ async def record_payment(payment_key, user_id, method, stars_amount, charge_id=N
         return cur.rowcount == 1
 
 
-async def confirm_payment(payment_key, user_id):
-    async with aiosqlite.connect(DB_NAME) as db:
-        cur = await db.execute(
-            """UPDATE payment_records SET status='confirmed', confirmed_at=?
-               WHERE payment_key=? AND user_id=? AND status='pending'""",
-            (int(time.time()), payment_key, user_id),
-        )
-        await db.commit()
-        return cur.rowcount == 1
-
-
-async def payment_is_confirmed(payment_key, user_id):
-    async with aiosqlite.connect(DB_NAME) as db:
-        async with db.execute("SELECT status FROM payment_records WHERE payment_key=? AND user_id=?", (payment_key, user_id)) as cursor:
-            row = await cursor.fetchone()
-        return bool(row and row[0] == "confirmed")
-
-
 async def credit_confirmed_stars(user_id: int, amount: int, payment_key: str):
-    """Atomically credit a confirmed Stars purchase exactly once."""
+    """Credit a confirmed Stars purchase once; also grant non-cash virtual arena points."""
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute("BEGIN IMMEDIATE")
         async with db.execute("SELECT status FROM payment_records WHERE payment_key=? AND user_id=?", (payment_key, user_id)) as cur:
@@ -102,6 +85,9 @@ async def credit_confirmed_stars(user_id: int, amount: int, payment_key: str):
             await db.rollback()
             return False, 0.0
         await db.execute("UPDATE users SET balance=balance+? WHERE user_id=?", (amount, user_id))
+        await db.execute("CREATE TABLE IF NOT EXISTS virtual_battle_users (user_id INTEGER PRIMARY KEY, points INTEGER NOT NULL DEFAULT 0)")
+        await db.execute("INSERT OR IGNORE INTO virtual_battle_users(user_id,points) VALUES (?,0)", (user_id,))
+        await db.execute("UPDATE virtual_battle_users SET points=points+? WHERE user_id=?", (amount * STARS_TO_POINTS, user_id))
         await db.execute(
             "UPDATE payment_records SET status='confirmed', confirmed_at=? WHERE payment_key=? AND user_id=? AND status='pending'",
             (int(time.time()), payment_key, user_id),
@@ -125,13 +111,13 @@ async def api_stars_invoice(request: web.Request):
     bot = request.app["bot"]
     invoice_link = await bot.create_invoice_link(
         title=f"GiftsEZZ — {amount} ⭐",
-        description=f"Пополнение игрового баланса GiftsEZZ на {amount} Telegram Stars.",
+        description=f"Пополнение игрового баланса GiftsEZZ на {amount} Telegram Stars. Покупка также начисляет виртуальные очки для арены.",
         payload=payload,
         currency="XTR",
         prices=[LabeledPrice(label=f"{amount} Stars", amount=amount)],
         provider_token="",
     )
-    return web.json_response({"ok": True, "amount": amount, "invoice_link": invoice_link})
+    return web.json_response({"ok": True, "amount": amount, "invoice_link": invoice_link, "arena_points": amount * STARS_TO_POINTS})
 
 
 @payments_router.pre_checkout_query()
@@ -172,7 +158,8 @@ async def successful_stars_payment(message: types.Message):
     credited, _bonus = await credit_confirmed_stars(user_id, amount, key)
     if credited:
         try:
-            await message.answer(f"✅ GiftsEZZ: на баланс зачислено {amount} ⭐.")
+            points = amount * STARS_TO_POINTS
+            await message.answer(f"✅ Зачислено {amount} ⭐ и {points} виртуальных очков для арены.")
         except Exception:
             pass
 
