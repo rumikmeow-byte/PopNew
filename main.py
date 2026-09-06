@@ -11,28 +11,29 @@ from pathlib import Path
 from urllib.parse import parse_qsl, quote
 
 import aiosqlite
-from aiohttp import ClientSession, web
+from aiohttp import ClientSession, WSMsgType, web
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
 from config import BOT_TOKEN, BOT_WALLET_ADDRESS, DB_NAME, MIN_DEPOSIT_TON, TON_API_KEY
-from db import get_referral_stats, get_user, increment_share_count, init_db, reset_share_count, set_free_case_time, update_balance, update_ton_balance
+from db import get_referral_stats, get_user, increment_share_count, reset_share_count, set_free_case_time, update_balance, update_ton_balance
 from user_handlers import handlers_router
 from miniapp_commands import router as miniapp_commands_router
 from admin_handlers import admin_router
 from payments import api_stars_invoice, init_payment_db, payments_router, register_payment_routes
 from utils import check_all_subscriptions
-from crash_engine import init_crash_db, register_crash_routes
+from crash_engine import init_crash_db, register_crash_routes, crash_state, place_crash_bet, cashout_crash_bet
 from battle_virtual import VirtualBattle
 from ton_battle import TonBattle
 from miniapp_features import MiniAppFeatures
 
 BASE_DIR = Path(__file__).resolve().parent
-APP_NAME = "GIFTSMMS"
+APP_NAME = "GiftsEZZ"
 REQUIRED_CASE_CHANNEL = "eclipsedlf"
 NEWS_CHANNEL = "@Eclipsedlf"
 SUPPORT_USERNAME = "@Eclipsed_consult"
+FREE_CASE_DROPS = ((1.0, 80), (1.5, 18), (5.0, 2))
 virtual_battle = VirtualBattle(DB_NAME)
 ton_battle = TonBattle(DB_NAME)
 
@@ -93,9 +94,7 @@ async def api_me(request):
 
 async def api_share(request):
     uid, _ = validate_webapp_user(request)
-    user = await get_user(uid)
-    if user["shared_count"] < 2:
-        await increment_share_count(uid)
+    await increment_share_count(uid)
     return web.json_response({"ok": True, "shared_count": (await get_user(uid))["shared_count"]})
 
 
@@ -111,27 +110,54 @@ async def api_case_access(request):
     uid, _ = validate_webapp_user(request)
     user = await get_user(uid)
     subscribed = await case_subscription_ok(request.app["bot"], uid)
+    ref_count, _ = await get_referral_stats(uid)
     available = int(time.time()) - user["free_case_time"] >= 86400
-    return web.json_response({"ok": subscribed and available, "subscribed": subscribed, "available": available, "channel": REQUIRED_CASE_CHANNEL})
+    return web.json_response({
+        "ok": subscribed and ref_count >= 3 and available,
+        "subscribed": subscribed,
+        "referrals": ref_count,
+        "need_referrals": max(0, 3 - ref_count),
+        "available": available,
+        "channel": REQUIRED_CASE_CHANNEL,
+    })
+
+
+def choose_free_case_drop():
+    ticket = secrets.randbelow(100)
+    cursor = 0
+    for amount, weight in FREE_CASE_DROPS:
+        cursor += weight
+        if ticket < cursor:
+            return amount
+    return FREE_CASE_DROPS[-1][0]
 
 
 async def api_free_case(request):
     uid, _ = validate_webapp_user(request)
-    user = await get_user(uid)
     now = int(time.time())
-    if now - user["free_case_time"] < 86400:
-        return web.json_response({"ok": False, "message": "Бесплатный кейс будет доступен через 24 часа."})
     if not await case_subscription_ok(request.app["bot"], uid):
-        return web.json_response({"ok": False, "message": "Подпишитесь на @eclipsedlf."})
-    if not await check_all_subscriptions(request.app["bot"], uid):
-        return web.json_response({"ok": False, "message": "Сначала подпишитесь на обязательные каналы."})
-    if user["shared_count"] < 2:
-        return web.json_response({"ok": False, "message": f"Поделитесь ссылкой 2 раза. Прогресс: {user['shared_count']}/2", "need_share": True})
-    reward = secrets.choice([1, 5, 10])
-    await update_balance(uid, reward)
-    await set_free_case_time(uid, now)
-    await reset_share_count(uid)
-    return web.json_response({"ok": True, "reward": reward, "profile": await get_user(uid)})
+        return web.json_response({"ok": False, "message": "Подпишитесь на @eclipsedlf и нажмите «Проверить»."})
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("BEGIN IMMEDIATE")
+        async with db.execute("SELECT balance,free_case_time FROM users WHERE user_id=?", (uid,)) as cur:
+            user = await cur.fetchone()
+        if not user:
+            await db.execute("INSERT INTO users(user_id) VALUES(?)", (uid,))
+            balance, free_case_time = 0.0, 0
+        else:
+            balance, free_case_time = float(user[0] or 0), int(user[1] or 0)
+        async with db.execute("SELECT COUNT(*) FROM referrals WHERE inviter_id=?", (uid,)) as cur:
+            ref_count = int((await cur.fetchone())[0])
+        if now - free_case_time < 86400:
+            await db.rollback()
+            return web.json_response({"ok": False, "message": "Бесплатный кейс будет доступен через 24 часа."})
+        if ref_count < 3:
+            await db.rollback()
+            return web.json_response({"ok": False, "message": f"Пригласите ещё {3-ref_count} друзей.", "referrals": ref_count, "need_referrals": 3-ref_count})
+        reward = choose_free_case_drop()
+        await db.execute("UPDATE users SET balance=balance+?, free_case_time=? WHERE user_id=?", (reward, now, uid))
+        await db.commit()
+    return web.json_response({"ok": True, "reward": reward, "probabilities": {"1": 80, "1.5": 18, "5": 2}, "profile": await get_user(uid)})
 
 
 async def api_referrals(request):
@@ -148,7 +174,7 @@ async def api_deposit(request):
 async def api_ton_deposit(request):
     uid, _ = validate_webapp_user(request)
     if not BOT_WALLET_ADDRESS:
-        return web.json_response({"ok": False, "message": "TON-кошелёк GIFTSMMS пока не настроен."})
+        return web.json_response({"ok": False, "message": "TON-кошелёк GiftsEZZ пока не настроен."})
     try:
         amount = float((await request.json()).get("amount", 0))
     except Exception:
@@ -156,7 +182,7 @@ async def api_ton_deposit(request):
     if amount < MIN_DEPOSIT_TON:
         return web.json_response({"ok": False, "message": f"Минимум для TON: {MIN_DEPOSIT_TON:g} TON."})
     nonce = secrets.token_hex(6)
-    comment = f"GIFTSMMS:{uid}:{nonce}"
+    comment = f"GIFTSEZZ:{uid}:{nonce}"
     intent_hash = f"intent:{uid}:{nonce}"
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute("INSERT INTO ton_deposits(user_id,tx_hash,amount_ton,destination,status,created_at) VALUES(?,?,?,?,?,?)", (uid, intent_hash, amount, BOT_WALLET_ADDRESS, "pending", int(time.time())))
@@ -199,7 +225,7 @@ async def api_ton_confirm(request):
     text = str(msg.get("message") or decoded.get("comment") or decoded.get("text") or "")
     value = int(msg.get("value") or 0)
     expected = float(intent[1])
-    if ((destination and destination != BOT_WALLET_ADDRESS) or value < int(expected * 1e9) or not text.startswith(f"GIFTSMMS:{uid}:")):
+    if ((destination and destination != BOT_WALLET_ADDRESS) or value < int(expected * 1e9) or not text.startswith(f"GIFTSEZZ:{uid}:")):
         return web.json_response({"ok": False, "message": "Сумма, адрес или комментарий не совпадают с заявкой."})
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute("UPDATE ton_deposits SET tx_hash=?,status='confirmed',confirmed_at=? WHERE deposit_id=? AND status='pending'", (tx_hash, int(time.time()), intent[0]))
@@ -234,6 +260,52 @@ async def api_ton_battle_join(request):
     except Exception:
         return web.json_response({"ok": False, "message": "Некорректная сумма TON."})
     return web.json_response(await ton_battle.join(uid, amount))
+
+
+async def api_ws(request):
+    try:
+        uid, _ = validate_webapp_user(request)
+    except web.HTTPException as exc:
+        return exc
+    ws = web.WebSocketResponse(heartbeat=25)
+    await ws.prepare(request)
+    try:
+        while not ws.closed:
+            payload = {
+                "type": "state",
+                "server_time": time.time(),
+                "crash": await crash_state(DB_NAME, uid),
+                "arena": await virtual_battle.snapshot(uid),
+                "ton_arena": await ton_battle.snapshot(uid),
+            }
+            await ws.send_json(payload)
+            try:
+                msg = await asyncio.wait_for(ws.receive(), timeout=1.0)
+                if msg.type == WSMsgType.TEXT:
+                    try:
+                        action = json.loads(msg.data)
+                    except json.JSONDecodeError:
+                        action = {}
+                    kind = action.get("action")
+                    if kind == "crash_bet":
+                        ok, message = await place_crash_bet(DB_NAME, uid, int(action.get("amount", 0)))
+                        await ws.send_json({"type": "action", "action": kind, "ok": ok, "message": message})
+                    elif kind == "crash_cashout":
+                        ok, message, payout = await cashout_crash_bet(DB_NAME, uid)
+                        await ws.send_json({"type": "action", "action": kind, "ok": ok, "message": message, "payout": payout})
+                    elif kind == "arena_bet":
+                        result = await virtual_battle.join(uid, int(action.get("amount", 0)))
+                        await ws.send_json({"type": "action", "action": kind, **result})
+                    elif kind == "ton_bet":
+                        result = await ton_battle.join(uid, float(action.get("amount", 0)))
+                        await ws.send_json({"type": "action", "action": kind, **result})
+                elif msg.type in (WSMsgType.CLOSE, WSMsgType.CLOSING, WSMsgType.ERROR):
+                    break
+            except asyncio.TimeoutError:
+                continue
+    finally:
+        await ws.close()
+    return ws
 
 
 async def main():
@@ -273,6 +345,7 @@ async def main():
     app.router.add_post("/api/public-battle/join", api_public_battle_join)
     app.router.add_get("/api/ton-battle", api_ton_battle)
     app.router.add_post("/api/ton-battle/join", api_ton_battle_join)
+    app.router.add_get("/ws", api_ws)
     await features.routes(app, validate_webapp_user)
     register_payment_routes(app)
     register_crash_routes(app, DB_NAME, validate_webapp_user)
@@ -281,7 +354,7 @@ async def main():
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-    logging.info("GIFTSMMS server started on %s | news=%s | support=%s", port, NEWS_CHANNEL, SUPPORT_USERNAME)
+    logging.info("%s server started on %s | news=%s | support=%s", APP_NAME, port, NEWS_CHANNEL, SUPPORT_USERNAME)
     try:
         await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(bot)
