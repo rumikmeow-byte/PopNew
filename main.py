@@ -20,7 +20,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram import BaseMiddleware
 
 from config import ADMIN_ID, BOT_TOKEN, BOT_WALLET_ADDRESS, DB_NAME, MIN_DEPOSIT_TON, TON_API_KEY
-from db import get_referral_stats, get_user, increment_share_count, update_ton_balance, init_db
+from db import add_referral, get_referral_stats, get_user, increment_share_count, update_ton_balance, init_db
 from user_handlers import handlers_router
 from miniapp_commands import router as miniapp_commands_router
 from admin_handlers import admin_router
@@ -136,9 +136,29 @@ async def health(request):
     return web.json_response({"status": "ok", "app": APP_NAME})
 
 
+async def process_startapp_referral(request, uid: int):
+    init_data = request.headers.get("X-Telegram-Init-Data", "") or request.query.get("initData", "")
+    if not init_data:
+        return
+    pairs = dict(parse_qsl(init_data, keep_blank_values=True))
+    start_param = (pairs.get("start_param") or request.query.get("startapp") or "").strip()
+    if not start_param.startswith("ref_"):
+        return
+    try:
+        referrer_id = int(start_param.split("_", 1)[1])
+    except (ValueError, IndexError):
+        return
+    if referrer_id == uid:
+        return
+    user = await get_user(uid)
+    if user and int(user.get("ref_count", 0) or 0) == 0 and float(user.get("balance", 0) or 0) == 0:
+        await add_referral(referrer_id, uid)
+
+
 async def api_me(request):
     uid, telegram_user = validate_webapp_user(request)
     await require_webapp_subscription(request, uid)
+    await process_startapp_referral(request, uid)
     user = await get_user(uid)
     ref_count, ref_earned = await get_referral_stats(uid)
     return web.json_response({"user": telegram_user, "profile": user, "ref_count": ref_count, "ref_earned": ref_earned, "subscribed": True})
@@ -213,7 +233,7 @@ async def api_referrals(request):
     await require_webapp_subscription(request, uid)
     count, earned = await get_referral_stats(uid)
     bot = await request.app["bot"].get_me()
-    return web.json_response({"count": count, "earned": earned, "link": f"https://t.me/{bot.username}?start=ref_{uid}"})
+    return web.json_response({"count": count, "earned": earned, "link": f"https://t.me/{bot.username}?startapp=ref_{uid}"})
 
 
 async def api_deposit(request):
