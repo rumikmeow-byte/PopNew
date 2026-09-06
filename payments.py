@@ -17,7 +17,7 @@ payments_router = Router()
 
 
 def validate_webapp_user(request: web.Request):
-    init_data = request.headers.get("X-Telegram-Init-Data", "")
+    init_data = request.headers.get("X-Telegram-Init-Data", "") or request.query.get("initData", "")
     if not init_data:
         raise web.HTTPUnauthorized(text="Telegram initData is required")
     pairs = dict(parse_qsl(init_data, keep_blank_values=True))
@@ -89,12 +89,29 @@ async def confirm_payment(payment_key, user_id):
 
 async def payment_is_confirmed(payment_key, user_id):
     async with aiosqlite.connect(DB_NAME) as db:
-        async with db.execute(
-            "SELECT status FROM payment_records WHERE payment_key=? AND user_id=?",
-            (payment_key, user_id),
-        ) as cursor:
+        async with db.execute("SELECT status FROM payment_records WHERE payment_key=? AND user_id=?", (payment_key, user_id)) as cursor:
             row = await cursor.fetchone()
         return bool(row and row[0] == "confirmed")
+
+
+async def credit_confirmed_stars(user_id: int, amount: int, payment_key: str):
+    """Atomically credit the payer and the inviter's 10% bonus exactly once."""
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("BEGIN IMMEDIATE")
+        async with db.execute("SELECT status FROM payment_records WHERE payment_key=? AND user_id=?", (payment_key, user_id)) as cur:
+            row = await cur.fetchone()
+        if not row or row[0] == "confirmed":
+            await db.rollback()
+            return False, 0.0
+        await db.execute("UPDATE users SET balance=balance+? WHERE user_id=?", (amount, user_id))
+        async with db.execute("SELECT inviter_id FROM referrals WHERE invited_id=? LIMIT 1", (user_id,)) as cur:
+            inviter = await cur.fetchone()
+        bonus = round(float(amount) * 0.10, 2) if inviter else 0.0
+        if inviter and bonus > 0:
+            await db.execute("UPDATE users SET balance=balance+?, ref_earned=ref_earned+? WHERE user_id=?", (bonus, bonus, inviter[0]))
+        await db.execute("UPDATE payment_records SET status='confirmed', confirmed_at=? WHERE payment_key=? AND user_id=? AND status='pending'", (int(time.time()), payment_key, user_id))
+        await db.commit()
+        return True, bonus
 
 
 async def api_stars_invoice(request: web.Request):
@@ -105,10 +122,7 @@ async def api_stars_invoice(request: web.Request):
     except (TypeError, ValueError):
         amount = 0
     if amount < MIN_DEPOSIT_STARS or amount > MAX_DEPOSIT_STARS:
-        return web.json_response({
-            "ok": False,
-            "message": f"Сумма должна быть от {MIN_DEPOSIT_STARS} до {MAX_DEPOSIT_STARS} ⭐.",
-        })
+        return web.json_response({"ok": False, "message": f"Сумма должна быть от {MIN_DEPOSIT_STARS} до {MAX_DEPOSIT_STARS} ⭐."})
 
     nonce = int(time.time() * 1000)
     payload = f"stars_deposit:{user_id}:{amount}:{nonce}"
@@ -116,8 +130,8 @@ async def api_stars_invoice(request: web.Request):
 
     bot = request.app["bot"]
     invoice_link = await bot.create_invoice_link(
-        title=f"GIFTSMMS — {amount} ⭐",
-        description=f"Пополнение игрового баланса GIFTSMMS на {amount} Telegram Stars.",
+        title=f"GiftsEZZ — {amount} ⭐",
+        description=f"Пополнение игрового баланса GiftsEZZ на {amount} Telegram Stars.",
         payload=payload,
         currency="XTR",
         prices=[LabeledPrice(label=f"{amount} Stars", amount=amount)],
@@ -163,12 +177,13 @@ async def successful_stars_payment(message: types.Message):
     key = f"stars_charge:{charge_id}"
     inserted = await record_payment(key, user_id, "stars", amount, charge_id=charge_id)
     if inserted:
-        await update_balance(user_id, amount)
-        await confirm_payment(key, user_id)
-        try:
-            await message.answer(f"✅ GIFTSMMS: на баланс зачислено {amount} ⭐.")
-        except Exception:
-            pass
+        credited, bonus = await credit_confirmed_stars(user_id, amount, key)
+        if credited:
+            try:
+                suffix = f" + {bonus:g} ⭐ реферального бонуса" if bonus else ""
+                await message.answer(f"✅ GiftsEZZ: на баланс зачислено {amount} ⭐.{suffix}")
+            except Exception:
+                pass
 
 
 @payments_router.message(Command("paysupport"))
