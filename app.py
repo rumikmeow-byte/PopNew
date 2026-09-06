@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from aiohttp import web
 from aiogram import Bot, Dispatcher
 from aiogram.exceptions import TelegramUnauthorizedError
@@ -36,12 +37,13 @@ async def run_health_server():
 
 
 async def main():
-    if not settings.bot_token:
+    token = os.getenv("BOT_TOKEN", "").strip().strip('"').strip("'")
+    if not token:
         raise RuntimeError("BOT_TOKEN is not configured in the environment")
 
     await init_db()
     runner = await run_health_server()
-    bot = Bot(settings.bot_token)
+    bot = Bot(token)
     dp = Dispatcher()
     dp.include_routers(
         start_router,
@@ -52,8 +54,6 @@ async def main():
     )
 
     try:
-        # Validate the token before starting long polling so Render logs show
-        # a clear authentication error instead of a generic failed deploy.
         me = await bot.get_me()
         logger.info("Telegram bot authenticated as @%s (id=%s)", me.username, me.id)
         await bot.delete_webhook(drop_pending_updates=False)
