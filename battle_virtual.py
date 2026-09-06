@@ -4,11 +4,14 @@ import time
 
 import aiosqlite
 
+from config import ADMIN_ID
+
 
 MIN_REAL_PLAYERS = 2
 ROUND_WAIT_SECONDS = 15
 STARS_TO_POINTS = 100
 TON_TO_POINTS = 10000
+TEST_POINTS = 200
 
 
 class VirtualBattle:
@@ -20,6 +23,7 @@ class VirtualBattle:
     async def init(self):
         async with aiosqlite.connect(self.db_name) as db:
             await db.execute("CREATE TABLE IF NOT EXISTS virtual_battle_users (user_id INTEGER PRIMARY KEY, points INTEGER NOT NULL DEFAULT 0)")
+            await db.execute("CREATE TABLE IF NOT EXISTS virtual_test_grants (user_id INTEGER PRIMARY KEY, points INTEGER NOT NULL, granted_at INTEGER NOT NULL)")
             await db.execute("""CREATE TABLE IF NOT EXISTS public_battles (
                 battle_id INTEGER PRIMARY KEY AUTOINCREMENT, status TEXT NOT NULL DEFAULT 'waiting',
                 created_at INTEGER NOT NULL, countdown_end INTEGER, ended_at INTEGER,
@@ -29,6 +33,15 @@ class VirtualBattle:
                 display_name TEXT NOT NULL DEFAULT 'Игрок', joined_at INTEGER NOT NULL,
                 PRIMARY KEY (battle_id, user_id))""")
             await self._ensure_column(db, "public_battle_players", "display_name", "TEXT NOT NULL DEFAULT 'Игрок'")
+
+            # One-time 200-point test grant for the bot admin. These are virtual points only.
+            if ADMIN_ID:
+                async with db.execute("SELECT 1 FROM virtual_test_grants WHERE user_id=?", (ADMIN_ID,)) as cur:
+                    already_granted = await cur.fetchone()
+                if not already_granted:
+                    await db.execute("INSERT OR IGNORE INTO virtual_battle_users(user_id,points) VALUES (?,0)", (ADMIN_ID,))
+                    await db.execute("UPDATE virtual_battle_users SET points=points+? WHERE user_id=?", (TEST_POINTS, ADMIN_ID))
+                    await db.execute("INSERT INTO virtual_test_grants(user_id,points,granted_at) VALUES (?,?,?)", (ADMIN_ID, TEST_POINTS, int(time.time())))
             await db.commit()
 
     @staticmethod
@@ -98,7 +111,6 @@ class VirtualBattle:
             async with db.execute("SELECT user_id,bet_points FROM public_battle_players WHERE battle_id=? ORDER BY joined_at", (battle_id,)) as cur:
                 players = await cur.fetchall()
             if len(players) < MIN_REAL_PLAYERS:
-                # No bots or AFK placeholders: an under-filled round simply expires.
                 await db.execute("UPDATE public_battles SET status='finished',ended_at=? WHERE battle_id=? AND status='waiting'", (now, battle_id))
                 continue
             await db.execute("UPDATE public_battles SET status='active',countdown_end=? WHERE battle_id=? AND status='waiting'", (now + 10, battle_id))
