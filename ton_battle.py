@@ -4,8 +4,6 @@ import time
 
 import aiosqlite
 
-from db import update_ton_balance
-
 
 class TonBattle:
     def __init__(self, db_name: str):
@@ -43,10 +41,7 @@ class TonBattle:
             return row[0]
         seed = secrets.token_hex(32)
         commitment = hashlib.sha256(seed.encode()).hexdigest()
-        cur = await db.execute(
-            "INSERT INTO ton_public_battles(status,created_at,seed,hash) VALUES ('waiting',?,?,?)",
-            (int(time.time()), seed, commitment),
-        )
+        cur = await db.execute("INSERT INTO ton_public_battles(status,created_at,seed,hash) VALUES ('waiting',?,?,?)", (int(time.time()), seed, commitment))
         await db.commit()
         return cur.lastrowid
 
@@ -57,12 +52,11 @@ class TonBattle:
         for battle_id, seed in due:
             async with db.execute("SELECT user_id,bet_ton FROM ton_public_battle_players WHERE battle_id=? ORDER BY joined_at", (battle_id,)) as cur:
                 players = await cur.fetchall()
-            total = sum(max(0.0, float(bet)) for _, bet in players)
+            weights = [(uid, int(round(max(0.0, float(bet)) * 1_000_000_000))) for uid, bet in players]
+            total_nano = sum(w for _, w in weights)
+            total = total_nano / 1_000_000_000
             winner = None
-            if total > 0:
-                # Use nanoton precision to make the weighted draw deterministic and auditable.
-                weights = [(uid, int(round(max(0.0, float(bet)) * 1_000_000_000))) for uid, bet in players]
-                total_nano = sum(w for _, w in weights)
+            if total_nano:
                 ticket = int.from_bytes(hashlib.sha256(f"{seed}:{battle_id}".encode()).digest()[:8], "big") % total_nano
                 cursor = 0
                 for uid, weight in weights:
@@ -71,7 +65,7 @@ class TonBattle:
                         winner = uid
                         break
             if winner is not None and total > 0:
-                await update_ton_balance(winner, total)
+                await db.execute("UPDATE users SET ton_balance=ton_balance+? WHERE user_id=?", (total, winner))
             await db.execute("UPDATE ton_public_battles SET status='finished',ended_at=?,winner_id=? WHERE battle_id=? AND status='active'", (now, winner, battle_id))
         if due:
             await db.commit()
@@ -94,10 +88,7 @@ class TonBattle:
                 "winner_id": battle[3],
                 "hash": battle[4],
                 "bank": round(total, 6),
-                "players": [
-                    {"user_id": uid, "bet": round(float(bet), 6), "chance": round((float(bet) / total) * 100, 2) if total else 0}
-                    for uid, bet in players
-                ],
+                "players": [{"user_id": uid, "bet": round(float(bet), 6), "chance": round((float(bet) / total) * 100, 2) if total else 0} for uid, bet in players],
             }
 
     async def join(self, user_id: int, amount: float):
@@ -123,11 +114,11 @@ class TonBattle:
             if balance + 1e-9 < amount:
                 return {"ok": False, "message": "Недостаточно TON. Пополни баланс."}
             now = int(time.time())
-            # The balance and player record are changed in one SQLite transaction.
             await db.execute("UPDATE users SET ton_balance=ton_balance-? WHERE user_id=? AND ton_balance>=?", (amount, user_id, amount))
             async with db.execute("SELECT changes()") as cur:
                 changed = (await cur.fetchone())[0]
             if changed != 1:
+                await db.rollback()
                 return {"ok": False, "message": "Баланс TON изменился. Попробуй ещё раз."}
             await db.execute("INSERT INTO ton_public_battle_players(battle_id,user_id,bet_ton,joined_at) VALUES (?,?,?,?)", (battle_id, user_id, amount, now))
             async with db.execute("SELECT COUNT(*) FROM ton_public_battle_players WHERE battle_id=?", (battle_id,)) as cur:
