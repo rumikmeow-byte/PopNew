@@ -26,86 +26,55 @@ from crash_engine import init_crash_db, register_crash_routes
 from battle_virtual import VirtualBattle
 from miniapp_features import MiniAppFeatures
 
-BASE_DIR = Path(__file__).resolve().parent
-REQUIRED_CASE_CHANNEL = "eclipsedlf"
-APP_NAME = "GIFTSMMS"
-virtual_battle = VirtualBattle(DB_NAME)
+BASE_DIR=Path(__file__).resolve().parent; REQUIRED_CASE_CHANNEL="eclipsedlf"; APP_NAME="GIFTSMMS"; virtual_battle=VirtualBattle(DB_NAME)
 
-
-def validate_webapp_user(request: web.Request):
-    init_data = request.headers.get("X-Telegram-Init-Data", "")
-    if not init_data:
-        raise web.HTTPUnauthorized(text="Telegram initData is required")
-    pairs = dict(parse_qsl(init_data, keep_blank_values=True))
-    received_hash = pairs.pop("hash", None)
-    auth_date = pairs.get("auth_date")
-    if not received_hash or not auth_date:
-        raise web.HTTPUnauthorized(text="Invalid Telegram initData")
+def validate_webapp_user(request):
+    init_data=request.headers.get("X-Telegram-Init-Data","")
+    if not init_data: raise web.HTTPUnauthorized(text="Telegram initData is required")
+    pairs=dict(parse_qsl(init_data,keep_blank_values=True)); received=pairs.pop("hash",None); auth_date=pairs.get("auth_date")
+    if not received or not auth_date: raise web.HTTPUnauthorized(text="Invalid Telegram initData")
     try:
-        if int(time.time()) - int(auth_date) > 86400:
-            raise web.HTTPUnauthorized(text="Telegram session expired")
-    except ValueError:
-        raise web.HTTPUnauthorized(text="Invalid auth_date")
-    data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(pairs.items()))
-    secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
-    calculated = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(calculated, received_hash):
-        raise web.HTTPUnauthorized(text="Invalid Telegram signature")
-    try:
-        user = json.loads(pairs["user"])
-        return int(user["id"]), user
-    except (ValueError, KeyError, json.JSONDecodeError):
-        raise web.HTTPUnauthorized(text="Invalid Telegram user")
-
+        if int(time.time())-int(auth_date)>86400: raise web.HTTPUnauthorized(text="Telegram session expired")
+    except ValueError: raise web.HTTPUnauthorized(text="Invalid auth_date")
+    check="\n".join(f"{k}={v}" for k,v in sorted(pairs.items())); secret=hmac.new(b"WebAppData",BOT_TOKEN.encode(),hashlib.sha256).digest(); calc=hmac.new(secret,check.encode(),hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(calc,received): raise web.HTTPUnauthorized(text="Invalid Telegram signature")
+    try: user=json.loads(pairs["user"]); return int(user["id"]),user
+    except (ValueError,KeyError,json.JSONDecodeError): raise web.HTTPUnauthorized(text="Invalid Telegram user")
 
 async def handle_index(request):
-    html = (BASE_DIR / "webapp" / "index.html").read_text(encoding="utf-8")
-    injections=[]
+    html=(BASE_DIR/"webapp"/"index.html").read_text(encoding="utf-8"); injections=[]
     for src in ("/ton-payments.js","/battle-virtual.js"):
         if src not in html: injections.append(f'<script src="{src}"></script>')
     if injections: html=html.replace("</body>","\n".join(injections)+"\n</body>")
-    return web.Response(text=html, content_type="text/html")
+    return web.Response(text=html,content_type="text/html")
 
-async def file_response(name):
-    async def handler(request): return web.FileResponse(BASE_DIR / "webapp" / name)
+def file_handler(name):
+    async def handler(request): return web.FileResponse(BASE_DIR/"webapp"/name)
     return handler
 
 async def health(request): return web.json_response({"status":"ok","app":APP_NAME})
-
 async def api_me(request):
-    uid,tg=validate_webapp_user(request); user=await get_user(uid); rc,re=await get_referral_stats(uid)
-    return web.json_response({"user":tg,"profile":user,"ref_count":rc,"ref_earned":re})
-
+    uid,tg=validate_webapp_user(request); user=await get_user(uid); rc,re=await get_referral_stats(uid); return web.json_response({"user":tg,"profile":user,"ref_count":rc,"ref_earned":re})
 async def api_share(request):
     uid,_=validate_webapp_user(request); user=await get_user(uid)
     if user["shared_count"]<2: await increment_share_count(uid)
     return web.json_response({"ok":True,"shared_count":(await get_user(uid))["shared_count"]})
-
 async def case_subscription_ok(bot,user_id):
     try:
-        member=await bot.get_chat_member(chat_id=f"@{REQUIRED_CASE_CHANNEL}",user_id=user_id)
-        return member.status in ("member","administrator","creator")
-    except Exception: return False
-
+        member=await bot.get_chat_member(chat_id=f"@{REQUIRED_CASE_CHANNEL}",user_id=user_id); return member.status in ("member","administrator","creator")
+    except Exception:return False
 async def api_case_access(request):
-    uid,_=validate_webapp_user(request); user=await get_user(uid)
-    return web.json_response({"ok":await case_subscription_ok(request.app["bot"],uid) and int(time.time())-user["free_case_time"]>=86400,"subscribed":await case_subscription_ok(request.app["bot"],uid),"available":int(time.time())-user["free_case_time"]>=86400,"channel":REQUIRED_CASE_CHANNEL})
-
+    uid,_=validate_webapp_user(request); user=await get_user(uid); subscribed=await case_subscription_ok(request.app["bot"],uid); available=int(time.time())-user["free_case_time"]>=86400; return web.json_response({"ok":subscribed and available,"subscribed":subscribed,"available":available,"channel":REQUIRED_CASE_CHANNEL})
 async def api_free_case(request):
     uid,_=validate_webapp_user(request); user=await get_user(uid); now=int(time.time())
     if now-user["free_case_time"]<86400:return web.json_response({"ok":False,"message":"Бесплатный кейс будет доступен через 24 часа."})
     if not await case_subscription_ok(request.app["bot"],uid):return web.json_response({"ok":False,"message":"Подпишитесь на @eclipsedlf."})
     if not await check_all_subscriptions(request.app["bot"],uid):return web.json_response({"ok":False,"message":"Сначала подпишитесь на обязательные каналы."})
     if user["shared_count"]<2:return web.json_response({"ok":False,"message":f"Поделитесь ссылкой 2 раза. Прогресс: {user['shared_count']}/2","need_share":True})
-    reward=secrets.choice([1,5,10]); await update_balance(uid,reward); await set_free_case_time(uid,now); await reset_share_count(uid)
-    return web.json_response({"ok":True,"reward":reward,"profile":await get_user(uid)})
-
+    reward=secrets.choice([1,5,10]); await update_balance(uid,reward); await set_free_case_time(uid,now); await reset_share_count(uid); return web.json_response({"ok":True,"reward":reward,"profile":await get_user(uid)})
 async def api_referrals(request):
-    uid,_=validate_webapp_user(request); count,earned=await get_referral_stats(uid); bot=await request.app["bot"].get_me()
-    return web.json_response({"count":count,"earned":earned,"link":f"https://t.me/{bot.username}?start=ref_{uid}"})
-
+    uid,_=validate_webapp_user(request); count,earned=await get_referral_stats(uid); bot=await request.app["bot"].get_me(); return web.json_response({"count":count,"earned":earned,"link":f"https://t.me/{bot.username}?start=ref_{uid}"})
 async def api_deposit(request): return await api_stars_invoice(request)
-
 async def api_ton_deposit(request):
     uid,_=validate_webapp_user(request)
     if not BOT_WALLET_ADDRESS:return web.json_response({"ok":False,"message":"TON-кошелёк GIFTSMMS пока не настроен."})
@@ -113,11 +82,8 @@ async def api_ton_deposit(request):
     except Exception: amount=0
     if amount<MIN_DEPOSIT_TON:return web.json_response({"ok":False,"message":f"Минимум для TON: {MIN_DEPOSIT_TON:g} TON."})
     nonce=secrets.token_hex(6); comment=f"GIFTSMMS:{uid}:{nonce}"; key=f"intent:{uid}:{nonce}"
-    async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute("INSERT INTO ton_deposits(user_id,tx_hash,amount_ton,destination,status,created_at) VALUES(?,?,?,?,?,?)",(uid,key,amount,BOT_WALLET_ADDRESS,"pending",int(time.time()))); await db.commit()
-    nano=int(round(amount*1e9)); uri=f"ton://transfer/{BOT_WALLET_ADDRESS}?amount={nano}&text={quote(comment)}"
-    return web.json_response({"ok":True,"amount":amount,"comment":comment,"destination":BOT_WALLET_ADDRESS,"ton_uri":uri})
-
+    async with aiosqlite.connect(DB_NAME) as db: await db.execute("INSERT INTO ton_deposits(user_id,tx_hash,amount_ton,destination,status,created_at) VALUES(?,?,?,?,?,?)",(uid,key,amount,BOT_WALLET_ADDRESS,"pending",int(time.time()))); await db.commit()
+    uri=f"ton://transfer/{BOT_WALLET_ADDRESS}?amount={int(amount*1e9)}&text={quote(comment)}"; return web.json_response({"ok":True,"amount":amount,"comment":comment,"destination":BOT_WALLET_ADDRESS,"ton_uri":uri})
 async def api_ton_confirm(request):
     uid,_=validate_webapp_user(request)
     if not BOT_WALLET_ADDRESS or not TON_API_KEY:return web.json_response({"ok":False,"message":"TON-проверка не настроена."})
@@ -125,7 +91,7 @@ async def api_ton_confirm(request):
     except Exception: tx_hash=""
     if len(tx_hash)<40:return web.json_response({"ok":False,"message":"Укажите корректный hash TON-транзакции."})
     async with aiosqlite.connect(DB_NAME) as db:
-        async with db.execute("SELECT deposit_id,amount_ton FROM ton_deposits WHERE user_id=? AND status='pending' ORDER BY deposit_id DESC LIMIT 1",(uid,)) as c:intent=await c.fetchone()
+        async with db.execute("SELECT deposit_id,amount_ton FROM ton_deposits WHERE user_id=? AND status='pending' ORDER BY deposit_id DESC LIMIT 1",(uid,)) as c: intent=await c.fetchone()
     if not intent:return web.json_response({"ok":False,"message":"Сначала создайте заявку на TON-пополнение."})
     try:
         async with ClientSession() as session:
@@ -133,29 +99,30 @@ async def api_ton_confirm(request):
                 if r.status!=200:return web.json_response({"ok":False,"message":"TON-транзакция пока не найдена."})
                 tx=await r.json()
     except Exception:return web.json_response({"ok":False,"message":"Не удалось проверить TON-транзакцию сейчас."})
-    msg=tx.get("in_msg") or {}; destination=str((msg.get("destination") or {}).get("address") or msg.get("destination") or ""); value=int(msg.get("value") or 0); text=str(msg.get("message") or "")
-    expected=float(intent[1]); prefix=f"GIFTSMMS:{uid}:"
-    if destination and destination!=BOT_WALLET_ADDRESS or value<int(expected*1e9) or not text.startswith(prefix):return web.json_response({"ok":False,"message":"Сумма, адрес или комментарий не совпадают с заявкой."})
-    async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute("UPDATE ton_deposits SET tx_hash=?,status='confirmed',confirmed_at=? WHERE deposit_id=? AND status='pending'",(tx_hash,int(time.time()),intent[0])); await db.commit()
+    msg=tx.get("in_msg") or {}; destination=str((msg.get("destination") or {}).get("address") or msg.get("destination") or ""); value=int(msg.get("value") or 0); text=str(msg.get("message") or ""); expected=float(intent[1])
+    if destination and destination!=BOT_WALLET_ADDRESS or value<int(expected*1e9) or not text.startswith(f"GIFTSMMS:{uid}:"):return web.json_response({"ok":False,"message":"Сумма, адрес или комментарий не совпадают с заявкой."})
+    async with aiosqlite.connect(DB_NAME) as db: await db.execute("UPDATE ton_deposits SET tx_hash=?,status='confirmed',confirmed_at=? WHERE deposit_id=? AND status='pending'",(tx_hash,int(time.time()),intent[0])); await db.commit()
     await update_ton_balance(uid,expected); return web.json_response({"ok":True,"credited_ton":expected,"profile":await get_user(uid)})
+async def api_public_battle(request):
+    uid,_=validate_webapp_user(request); return web.json_response(await virtual_battle.snapshot(uid))
+async def api_public_battle_join(request):
+    uid,_=validate_webapp_user(request)
+    try: amount=int((await request.json()).get("amount",0))
+    except Exception:return web.json_response({"ok":False,"message":"Некорректная сумма"})
+    return web.json_response(await virtual_battle.join(uid,amount))
 
 async def main():
-    logging.info("Starting %s...",APP_NAME)
     await init_db(); await init_payment_db(); await init_crash_db(DB_NAME); await virtual_battle.init()
     bot=Bot(token=BOT_TOKEN,default=DefaultBotProperties(parse_mode=ParseMode.HTML)); features=MiniAppFeatures(DB_NAME,bot); await features.init()
     dp=Dispatcher(); dp.include_router(handlers_router); dp.include_router(admin_router); dp.include_router(payments_router)
     app=web.Application(); app["bot"]=bot
-    app.router.add_get("/",handle_index); app.router.add_get("/battle-virtual.js",await file_response("battle-virtual.js")); app.router.add_get("/ton-payments.js",await file_response("ton-payments.js")); app.router.add_get("/health",health); app.router.add_get("/tonconnect-manifest.json",lambda r:web.json_response({"url":str(r.url.with_path('/').with_query('')),"name":APP_NAME,"iconUrl":str(r.url.with_path('/icon-180.png').with_query(''))}))
-    app.router.add_get("/api/me",api_me); app.router.add_post("/api/share",api_share); app.router.add_get("/api/case-access",api_case_access); app.router.add_post("/api/free-case",api_free_case); app.router.add_get("/api/referrals",api_referrals); app.router.add_post("/api/deposit",api_deposit); app.router.add_post("/api/ton/deposit",api_ton_deposit); app.router.add_post("/api/ton/confirm",api_ton_confirm); app.router.add_post("/api/deposit/check",api_ton_confirm)
-    app.router.add_get("/api/public-battle",lambda r:web.json_response({})); app.router.add_post("/api/public-battle/join",lambda r:web.json_response({"ok":False,"message":"Use battle-virtual.js"}))
-    await features.routes(app,validate_webapp_user)
-    register_payment_routes(app); register_crash_routes(app,DB_NAME,validate_webapp_user)
-    port=int(os.getenv("PORT","10000")); runner=web.AppRunner(app); await runner.setup(); site=web.TCPSite(runner,"0.0.0.0",port); await site.start(); logging.info("GIFTSMMS web server started on %s",port)
-    try:
-        await bot.delete_webhook(drop_pending_updates=True); await dp.start_polling(bot)
-    finally:
-        await bot.session.close(); await runner.cleanup()
+    app.router.add_get("/",handle_index); app.router.add_get("/battle-virtual.js",file_handler("battle-virtual.js")); app.router.add_get("/ton-payments.js",file_handler("ton-payments.js")); app.router.add_get("/health",health)
+    app.router.add_get("/tonconnect-manifest.json",lambda r:web.json_response({"url":str(r.url.with_path('/').with_query('')),"name":APP_NAME,"iconUrl":str(r.url.with_path('/giftsmms-logo.svg').with_query(''))}))
+    app.router.add_get("/api/me",api_me); app.router.add_post("/api/share",api_share); app.router.add_get("/api/case-access",api_case_access); app.router.add_post("/api/free-case",api_free_case); app.router.add_get("/api/referrals",api_referrals); app.router.add_post("/api/deposit",api_deposit); app.router.add_post("/api/ton/deposit",api_ton_deposit); app.router.add_post("/api/ton/confirm",api_ton_confirm); app.router.add_post("/api/deposit/check",api_ton_confirm); app.router.add_get("/api/public-battle",api_public_battle); app.router.add_post("/api/public-battle/join",api_public_battle_join)
+    await features.routes(app,validate_webapp_user); register_payment_routes(app); register_crash_routes(app,DB_NAME,validate_webapp_user)
+    port=int(os.getenv("PORT","10000")); runner=web.AppRunner(app); await runner.setup(); site=web.TCPSite(runner,"0.0.0.0",port); await site.start(); logging.info("GIFTSMMS server started on %s",port)
+    try: await bot.delete_webhook(drop_pending_updates=True); await dp.start_polling(bot)
+    finally: await bot.session.close(); await runner.cleanup()
 
 if __name__=="__main__":
     logging.basicConfig(level=logging.INFO,stream=sys.stdout,format="%(asctime)s | %(levelname)s | %(message)s"); asyncio.run(main())
