@@ -34,8 +34,8 @@ BOT_WALLET_MNEMONIC = os.getenv("BOT_WALLET_MNEMONIC")
 BOT_WALLET_ADDRESS = os.getenv("BOT_WALLET_ADDRESS", "")
 
 # Telegram Stars are the payment rail for digital goods/services inside Telegram.
-MAX_DEPOSIT_STARS = get_int("MAX_DEPOSIT_STARS", 100000)
-MIN_DEPOSIT_STARS = get_int("MIN_DEPOSIT_STARS", 25)
+MAX_DEPOSIT_STARS = get_int("MAX_DEPOSIT_STARS", 500)
+MIN_DEPOSIT_STARS = get_int("MIN_DEPOSIT_STARS", 15)
 
 # Kept for legacy TON/wallet code; TON is not used as the in-app digital-goods payment rail.
 MIN_DEPOSIT_TON = get_float("MIN_DEPOSIT_TON", 0.1)
