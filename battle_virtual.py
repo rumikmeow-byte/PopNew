@@ -6,17 +6,19 @@ import aiosqlite
 
 
 MIN_REAL_PLAYERS = 2
+STARS_TO_POINTS = 100
+TON_TO_POINTS = 10000
 
 
 class VirtualBattle:
-    """Public virtual-points battle with real Telegram users only."""
+    """Public arena using purchased virtual points; points are not cash and cannot be withdrawn."""
 
     def __init__(self, db_name: str):
         self.db_name = db_name
 
     async def init(self):
         async with aiosqlite.connect(self.db_name) as db:
-            await db.execute("CREATE TABLE IF NOT EXISTS virtual_battle_users (user_id INTEGER PRIMARY KEY, points INTEGER NOT NULL DEFAULT 1000)")
+            await db.execute("CREATE TABLE IF NOT EXISTS virtual_battle_users (user_id INTEGER PRIMARY KEY, points INTEGER NOT NULL DEFAULT 0)")
             await db.execute("""CREATE TABLE IF NOT EXISTS public_battles (
                 battle_id INTEGER PRIMARY KEY AUTOINCREMENT, status TEXT NOT NULL DEFAULT 'waiting',
                 created_at INTEGER NOT NULL, countdown_end INTEGER, ended_at INTEGER,
@@ -34,6 +36,24 @@ class VirtualBattle:
             columns = {row[1] for row in await cur.fetchall()}
         if column not in columns:
             await db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+    async def credit_points(self, user_id: int, points: int):
+        points = int(points)
+        if points <= 0:
+            return False
+        async with aiosqlite.connect(self.db_name) as db:
+            await db.execute("INSERT OR IGNORE INTO virtual_battle_users(user_id,points) VALUES (?,0)", (user_id,))
+            await db.execute("UPDATE virtual_battle_users SET points=points+? WHERE user_id=?", (points, user_id))
+            await db.commit()
+        return True
+
+    async def get_points(self, user_id: int):
+        async with aiosqlite.connect(self.db_name) as db:
+            await db.execute("INSERT OR IGNORE INTO virtual_battle_users(user_id,points) VALUES (?,0)", (user_id,))
+            async with db.execute("SELECT points FROM virtual_battle_users WHERE user_id=?", (user_id,)) as cur:
+                points = int((await cur.fetchone())[0])
+            await db.commit()
+        return points
 
     async def _ensure_round(self, db):
         async with db.execute("SELECT battle_id,status FROM public_battles WHERE status IN ('waiting','active') ORDER BY battle_id DESC LIMIT 1") as cur:
@@ -65,8 +85,9 @@ class VirtualBattle:
                 if total and ticket < cursor:
                     winner = user_id
                     break
+            # The winner receives virtual points only. They are never converted to Stars/TON.
             if winner is not None:
-                await db.execute("INSERT OR IGNORE INTO virtual_battle_users(user_id,points) VALUES (?,1000)", (winner,))
+                await db.execute("INSERT OR IGNORE INTO virtual_battle_users(user_id,points) VALUES (?,0)", (winner,))
                 await db.execute("UPDATE virtual_battle_users SET points=points+? WHERE user_id=?", (total, winner))
             await db.execute("UPDATE public_battles SET status='finished',ended_at=?,winner_id=? WHERE battle_id=? AND status='active'", (now, winner, battle_id))
         if due:
@@ -80,9 +101,9 @@ class VirtualBattle:
                 battle = await cur.fetchone()
             async with db.execute("SELECT user_id,bet_points,display_name FROM public_battle_players WHERE battle_id=? ORDER BY joined_at", (battle_id,)) as cur:
                 players = await cur.fetchall()
-            await db.execute("INSERT OR IGNORE INTO virtual_battle_users(user_id,points) VALUES (?,1000)", (user_id,))
+            await db.execute("INSERT OR IGNORE INTO virtual_battle_users(user_id,points) VALUES (?,0)", (user_id,))
             async with db.execute("SELECT points FROM virtual_battle_users WHERE user_id=?", (user_id,)) as cur:
-                points = (await cur.fetchone())[0]
+                points = int((await cur.fetchone())[0])
             await db.commit()
         total = sum(int(bet) for _, bet, _ in players)
         return {
@@ -113,11 +134,11 @@ class VirtualBattle:
                 status = (await cur.fetchone())[0]
             if status != "waiting":
                 return {"ok": False, "message": "Раунд уже запущен. Дождитесь следующего."}
-            await db.execute("INSERT OR IGNORE INTO virtual_battle_users(user_id,points) VALUES (?,1000)", (user_id,))
+            await db.execute("INSERT OR IGNORE INTO virtual_battle_users(user_id,points) VALUES (?,0)", (user_id,))
             async with db.execute("SELECT points FROM virtual_battle_users WHERE user_id=?", (user_id,)) as cur:
-                points = (await cur.fetchone())[0]
+                points = int((await cur.fetchone())[0])
             if points < amount:
-                return {"ok": False, "message": "Недостаточно виртуальных очков."}
+                return {"ok": False, "message": "Сначала пополните баланс Stars или TON, чтобы получить виртуальные очки."}
             async with db.execute("SELECT 1 FROM public_battle_players WHERE battle_id=? AND user_id=?", (battle_id, user_id)) as cur:
                 if await cur.fetchone():
                     return {"ok": False, "message": "Ты уже в этом раунде."}
