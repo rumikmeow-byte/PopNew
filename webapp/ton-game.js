@@ -8,7 +8,7 @@
     button.onclick = async () => {
       try {
         const tg = window.Telegram?.WebApp;
-        const amount = Number(window.selectedTon || 0.25);
+        const amount = Number(document.querySelector('[data-ton].active')?.dataset.ton || 0.25);
         const headers = {'Content-Type':'application/json'};
         if (tg?.initData) headers['X-Telegram-Init-Data'] = tg.initData;
         const r = await fetch('/api/ton/deposit', {method:'POST', headers, body:JSON.stringify({amount})});
