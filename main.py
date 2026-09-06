@@ -25,6 +25,7 @@ from payments import api_stars_invoice, init_payment_db, payments_router, regist
 from utils import check_all_subscriptions
 from crash_engine import init_crash_db, register_crash_routes
 from battle_virtual import VirtualBattle
+from ton_battle import TonBattle
 from miniapp_features import MiniAppFeatures
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -33,6 +34,7 @@ REQUIRED_CASE_CHANNEL = "eclipsedlf"
 NEWS_CHANNEL = "@Eclipsedlf"
 SUPPORT_USERNAME = "@Eclipsed_consult"
 virtual_battle = VirtualBattle(DB_NAME)
+ton_battle = TonBattle(DB_NAME)
 
 
 def validate_webapp_user(request):
@@ -64,7 +66,7 @@ def validate_webapp_user(request):
 async def handle_index(request):
     html = (BASE_DIR / "webapp" / "index.html").read_text(encoding="utf-8")
     injections = []
-    for src in ("/ton-payments.js", "/battle-virtual.js", "/cleanup.js"):
+    for src in ("/ton-payments.js", "/battle-virtual.js", "/cleanup.js", "/ton-game.js"):
         if src not in html:
             injections.append(f'<script src="{src}"></script>')
     if injections:
@@ -220,11 +222,26 @@ async def api_public_battle_join(request):
     return web.json_response(await virtual_battle.join(uid, amount))
 
 
+async def api_ton_battle(request):
+    uid, _ = validate_webapp_user(request)
+    return web.json_response(await ton_battle.snapshot(uid))
+
+
+async def api_ton_battle_join(request):
+    uid, _ = validate_webapp_user(request)
+    try:
+        amount = float((await request.json()).get("amount", 0))
+    except Exception:
+        return web.json_response({"ok": False, "message": "Некорректная сумма TON."})
+    return web.json_response(await ton_battle.join(uid, amount))
+
+
 async def main():
     await init_db()
     await init_payment_db()
     await init_crash_db(DB_NAME)
     await virtual_battle.init()
+    await ton_battle.init()
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     features = MiniAppFeatures(DB_NAME, bot)
     await features.init()
@@ -237,7 +254,7 @@ async def main():
     app["bot"] = bot
     app.router.add_get("/", handle_index)
     app.router.add_get("/health", health)
-    for asset in ("battle-virtual.js", "ton-payments.js", "animations.css", "giftsmms-logo.svg", "cleanup.js"):
+    for asset in ("battle-virtual.js", "ton-payments.js", "ton-game.js", "animations.css", "giftsmms-logo.svg", "cleanup.js"):
         app.router.add_get(f"/{asset}", file_handler(asset))
     async def ton_manifest(request):
         base = str(request.url.with_path("/").with_query(""))
@@ -254,6 +271,8 @@ async def main():
     app.router.add_post("/api/deposit/check", api_ton_confirm)
     app.router.add_get("/api/public-battle", api_public_battle)
     app.router.add_post("/api/public-battle/join", api_public_battle_join)
+    app.router.add_get("/api/ton-battle", api_ton_battle)
+    app.router.add_post("/api/ton-battle/join", api_ton_battle_join)
     await features.routes(app, validate_webapp_user)
     register_payment_routes(app)
     register_crash_routes(app, DB_NAME, validate_webapp_user)
