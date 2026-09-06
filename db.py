@@ -247,3 +247,24 @@ async def get_referral_stats(user_id: int):
         async with db.execute("SELECT ref_earned FROM users WHERE user_id = ?", (user_id,)) as cursor:
             row = await cursor.fetchone()
         return count, (row[0] if row else 0)
+
+
+# Compatibility for legacy handlers. Real Stars/TON battle wagering is disabled.
+async def create_battle(*args, **kwargs):
+    return None
+
+
+async def get_battle_info(*args, **kwargs):
+    return None
+
+
+async def get_battle_players(*args, **kwargs):
+    return []
+
+
+async def add_player_to_battle(*args, **kwargs):
+    return False
+
+
+async def get_active_battles(*args, **kwargs):
+    return []
