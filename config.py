@@ -1,47 +1,18 @@
 import os
-
+from dataclasses import dataclass
 from dotenv import load_dotenv
-
 load_dotenv()
 
+@dataclass(frozen=True)
+class Settings:
+    bot_token: str = os.getenv("BOT_TOKEN", "")
+    admin_id: int = int(os.getenv("ADMIN_ID", "0"))
+    db_path: str = os.getenv("DB_PATH", "data.sqlite3")
+    referral_percent: float = float(os.getenv("REFERRAL_PERCENT", "5"))
+    support_username: str = os.getenv("SUPPORT_USERNAME", "support")
+    port: int = int(os.getenv("PORT", "10000"))
+    stars_to_credits: int = int(os.getenv("STARS_TO_CREDITS", "100"))
+    min_stake: int = int(os.getenv("MIN_STAKE", "1"))
+    max_stake: int = int(os.getenv("MAX_STAKE", "100000"))
 
-def get_int(name: str, default: int = 0) -> int:
-    value = os.getenv(name)
-    if value is None or value.strip() == "":
-        return default
-    try:
-        return int(value)
-    except ValueError as exc:
-        raise ValueError(f"{name} должен быть целым числом") from exc
-
-
-def get_float(name: str, default: float = 0.0) -> float:
-    value = os.getenv(name)
-    if value is None or value.strip() == "":
-        return default
-    try:
-        return float(value)
-    except ValueError as exc:
-        raise ValueError(f"{name} должен быть числом") from exc
-
-
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = get_int("ADMIN_ID", 0)
-BOT_NAME = os.getenv("BOT_NAME", "GIFTSMMS")
-DB_NAME = os.getenv("DB_NAME", "data/bot.db")
-TON_API_KEY = os.getenv("TON_API_KEY")
-BOT_WALLET_MNEMONIC = os.getenv("BOT_WALLET_MNEMONIC")
-BOT_WALLET_ADDRESS = os.getenv("BOT_WALLET_ADDRESS", "")
-
-# Telegram Stars are the payment rail for digital goods/services inside Telegram.
-MAX_DEPOSIT_STARS = get_int("MAX_DEPOSIT_STARS", 500)
-MIN_DEPOSIT_STARS = get_int("MIN_DEPOSIT_STARS", 15)
-
-# Kept for legacy TON/wallet code; TON is not used as the in-app digital-goods payment rail.
-MIN_DEPOSIT_TON = get_float("MIN_DEPOSIT_TON", 0.1)
-TON_TO_STARS_RATE = get_float("TON_TO_STARS_RATE", 1.0)
-
-if not BOT_TOKEN:
-    raise ValueError("Не задан BOT_TOKEN в переменных окружения Render.")
-if not ADMIN_ID:
-    raise ValueError("Не задан ADMIN_ID в переменных окружения Render.")
+settings = Settings()

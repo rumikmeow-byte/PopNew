@@ -1,28 +1,9 @@
 services:
   - type: web
-    name: popnew
+    name: popnew-bot
     runtime: python
     plan: free
+    region: frankfurt
     buildCommand: pip install -r requirements.txt
-    startCommand: python -u main.py
-    healthCheckPath: /health
-    autoDeployTrigger: commit
-    envVars:
-      - key: BOT_TOKEN
-        sync: false
-      - key: ADMIN_ID
-        sync: false
-      - key: BOT_NAME
-        value: GiftsEZZ
-      - key: DB_NAME
-        value: data/bot.db
-      - key: TON_API_KEY
-        sync: false
-      - key: BOT_WALLET_ADDRESS
-        sync: false
-      - key: BOT_WALLET_MNEMONIC
-        sync: false
-      - key: MAX_DEPOSIT_STARS
-        value: "2500"
-      - key: TON_TO_STARS_RATE
-        value: "1.0"
+    startCommand: python app.py
+    autoDeploy: true
