@@ -8,26 +8,19 @@ from config import settings
 from database.db import init_db
 from handlers.start import router as start_router
 from handlers.balance import router as balance_router
-from handlers.game import router as game_router
-from handlers.payments import router as payments_router
-from handlers.support import router as support_router
+from handlers.referrals import router as referrals_router
+from handlers.channel import router as channel_router
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
 logger = logging.getLogger(__name__)
-
 
 async def health(request: web.Request):
     return web.Response(text="ok")
-
 
 async def run_health_server():
     app = web.Application()
     app.router.add_get("/", health)
     app.router.add_get("/health", health)
-
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", settings.port)
@@ -35,24 +28,15 @@ async def run_health_server():
     logger.info("Health server listening on 0.0.0.0:%s", settings.port)
     return runner
 
-
 async def main():
     token = os.getenv("BOT_TOKEN", "").strip().strip('"').strip("'")
     if not token:
         raise RuntimeError("BOT_TOKEN is not configured in the environment")
-
     await init_db()
     runner = await run_health_server()
     bot = Bot(token)
     dp = Dispatcher()
-    dp.include_routers(
-        start_router,
-        balance_router,
-        game_router,
-        payments_router,
-        support_router,
-    )
-
+    dp.include_routers(start_router, channel_router, referrals_router, balance_router)
     try:
         me = await bot.get_me()
         logger.info("Telegram bot authenticated as @%s (id=%s)", me.username, me.id)
@@ -64,7 +48,6 @@ async def main():
     finally:
         await runner.cleanup()
         await bot.session.close()
-
 
 if __name__ == "__main__":
     asyncio.run(main())
