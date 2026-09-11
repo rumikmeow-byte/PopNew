@@ -1,7 +1,7 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 menu = ReplyKeyboardMarkup(keyboard=[
-    [KeyboardButton(text="Баланс"), KeyboardButton(text="Пополнить")],
-    [KeyboardButton(text="Играть"), KeyboardButton(text="Вывести")],
-    [KeyboardButton(text="Поддержка")],
+    [KeyboardButton(text="📣 Канал")],
+    [KeyboardButton(text="👥 Заработать рефералами")],
+    [KeyboardButton(text="💰 Баланс"), KeyboardButton(text="💸 Вывод")],
 ], resize_keyboard=True)
