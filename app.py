@@ -29,11 +29,24 @@ async def run_health_server():
     return runner
 
 async def main():
+    runner = await run_health_server()
+
+    # A second Render service may point at this same repository. Keep that
+    # service healthy without starting a second Telegram polling session.
+    if os.getenv("DISABLE_BOT_POLLING", "").strip().lower() in {"1", "true", "yes", "on"}:
+        logger.info("Bot polling disabled by DISABLE_BOT_POLLING")
+        try:
+            await asyncio.Event().wait()
+        finally:
+            await runner.cleanup()
+        return
+
     token = os.getenv("BOT_TOKEN", "").strip().strip('"').strip("'")
     if not token:
+        await runner.cleanup()
         raise RuntimeError("BOT_TOKEN is not configured in the environment")
+
     await init_db()
-    runner = await run_health_server()
     bot = Bot(token)
     dp = Dispatcher()
     dp.include_routers(start_router, channel_router, referrals_router, balance_router)
